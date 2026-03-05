@@ -1,0 +1,25 @@
+# Environment variables
+.env
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.tfvars.json
+.terraform/
+
+# Kubernetes secrets
+**/*secret*.yaml
+
+# Node / Python
+node_modules/
+__pycache__/
+
+# Logs
+*.log
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+security/*.json
