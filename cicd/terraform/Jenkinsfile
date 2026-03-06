@@ -29,6 +29,12 @@ pipeline {
     }
 
     stages {
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Gitleaks Scan') {
             steps {
                 sh '''
