@@ -84,3 +84,32 @@ variable "db_host" {
   type      = string
   sensitive = true
 }
+
+############################################
+# Dynamic Environment Variables
+############################################
+
+variable "environment" {
+  description = "The target environment (e.g., dev, qa, test, prod)"
+  type        = string
+}
+
+variable "vnet_address_space" {
+  description = "Address space for the VNet"
+  type        = list(string)
+}
+
+variable "public_subnets" {
+  description = "Map of public subnets (name => prefix)"
+  type        = map(string)
+}
+
+variable "app_subnets" {
+  description = "Map of private app subnets (name => prefix)"
+  type        = map(string)
+}
+
+variable "db_subnets" {
+  description = "Map of private db subnets (name => prefix)"
+  type        = map(string)
+}

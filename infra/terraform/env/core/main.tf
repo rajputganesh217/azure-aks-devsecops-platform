@@ -34,7 +34,12 @@ module "vnet" {
 
   resource_group_name = module.rg.rg_name
   location            = var.location
-  vnet_name           = "devsecops-vnet-${random_string.suffix.result}"
+  vnet_name           = "${var.environment}-devsecops-vnet-${random_string.suffix.result}"
+  
+  vnet_address_space = var.vnet_address_space
+  public_subnets     = var.public_subnets
+  app_subnets        = var.app_subnets
+  db_subnets         = var.db_subnets
 }
 
 ############################################
@@ -113,7 +118,7 @@ resource "azurerm_role_assignment" "kv_csi" {
 module "storage_account" {
   source = "../../modules/storage-account"
 
-  storage_account_name = "devsecopsreports${random_string.suffix.result}"
+  storage_account_name = "${var.environment}devsecopsrep${random_string.suffix.result}"
   location             = var.location
   resource_group_name  = module.rg.rg_name
 }
