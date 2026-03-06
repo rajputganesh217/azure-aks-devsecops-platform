@@ -4,6 +4,8 @@ resource "random_string" "suffix" {
   upper   = false
 }
 
+data "azurerm_client_config" "current" {}
+
 ############################################
 # Resource Group
 ############################################
@@ -93,7 +95,7 @@ module "keyvault" {
   keyvault_name       = "devsecops-kv-${random_string.suffix.result}"
   location            = var.location
   resource_group_name = module.rg.rg_name
-  tenant_id           = var.tenant_id
+  tenant_id           = data.azurerm_client_config.current.tenant_id
 
   postgres_db       = var.postgres_db
   postgres_user     = var.postgres_user
