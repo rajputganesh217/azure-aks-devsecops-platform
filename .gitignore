@@ -8,6 +8,8 @@
 *.tfvars.json
 .terraform/
 
+!infra/terraform/env/core/tfvars/*.tfvars
+
 # Kubernetes secrets
 **/*secret*.yaml
 
@@ -23,7 +25,6 @@ __pycache__/
 .vscode/
 .idea/
 security/*.json
-*.tfvars
 *.auto.tfvars
 .terraform/
 terraform.tfstate

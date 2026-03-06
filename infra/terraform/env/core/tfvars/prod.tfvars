@@ -1,0 +1,33 @@
+subscription_id = ""
+tenant_id       = ""
+client_id       = ""
+client_secret   = ""
+
+resource_group_name = "aks-microservices-prod-rg"
+location            = "canadacentral"
+
+aks_name   = "microservices-aks-prod"
+dns_prefix = "microaksprod"
+
+node_count = 3
+vm_size    = "Standard_DS2_v2"
+
+acr_name = "mydevopsacrprod123"
+
+environment = "prod"
+vnet_address_space = ["10.3.0.0/16"]
+public_subnets = {
+  "subnet-public-az1" = "10.3.1.0/24"
+  "subnet-public-az2" = "10.3.2.0/24"
+  "subnet-public-az3" = "10.3.3.0/24"
+}
+app_subnets = {
+  "subnet-private-app-az1" = "10.3.10.0/24"
+  "subnet-private-app-az2" = "10.3.11.0/24"
+  "subnet-private-app-az3" = "10.3.12.0/24"
+}
+db_subnets = {
+  "subnet-private-db-az1" = "10.3.20.0/24"
+  "subnet-private-db-az2" = "10.3.21.0/24"
+  "subnet-private-db-az3" = "10.3.22.0/24"
+}
