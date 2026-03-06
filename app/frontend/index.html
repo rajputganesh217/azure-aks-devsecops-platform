@@ -1,140 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shoe Store</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: #1e3a8a; /* Blue background */
-      color: white;
-    }
-    header {
-      text-align: center;
-      padding: 20px;
-      background-color: #1e40af;
-    }
-    h1 {
-      margin: 0;
-    }
-    .container {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
-      padding: 20px;
-    }
-    .card {
-      background: white;
-      color: black;
-      border-radius: 10px;
-      padding: 15px;
-      text-align: center;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-    }
-    .card img {
-      width: 100%;
-      border-radius: 10px;
-      height: 200px;
-      object-fit: cover;
-    }
-    .card h3 {
-      margin: 10px 0;
-    }
-    .btn {
-      display: inline-block;
-      margin-top: 10px;
-      padding: 10px 15px;
-      background-color: #1e40af;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      text-decoration: none;
-    }
-    .btn:hover {
-      background-color: #2563eb;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shoe Store</title>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial;
+background:#1e3a8a;
+color:white;
+}
+
+header{
+text-align:center;
+padding:20px;
+background:#1e40af;
+}
+
+.container{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+gap:20px;
+padding:20px;
+}
+
+.card{
+background:white;
+color:black;
+border-radius:10px;
+padding:15px;
+text-align:center;
+box-shadow:0 4px 6px rgba(0,0,0,0.2);
+}
+
+.card img{
+width:100%;
+height:200px;
+object-fit:cover;
+border-radius:10px;
+}
+
+.btn{
+margin-top:10px;
+padding:10px 15px;
+background:#1e40af;
+color:white;
+border:none;
+border-radius:5px;
+cursor:pointer;
+}
+
+.btn:hover{
+background:#2563eb;
+}
+
+.status{
+text-align:center;
+font-size:18px;
+margin-top:10px;
+}
+
+</style>
+
 </head>
+
 <body>
-  <header>
-    <h1>👟 Shoe Store</h1>
-    <p>Find your perfect pair of shoes</p>
-  </header>
 
-  <div class="container">
-    <!-- 10 shoe cards -->
-    <div class="card">
-      <img src="https://via.placeholder.com/250x200.png?text=Shoe+1" alt="Shoe 1">
-      <h3>Running Shoes</h3>
-      <p>$50</p>
-      <a href="#" class="btn">Buy Now</a>
-    </div>
+<header>
+<h1>👟 Shoe Store</h1>
+<p>Find your perfect pair of shoes</p>
+</header>
 
-    <div class="card">
-      <img src="https://via.placeholder.com/250x200.png?text=Shoe+2" alt="Shoe 2">
-      <h3>Casual Sneakers</h3>
-      <p>$45</p>
-      <a href="#" class="btn">Buy Now</a>
-    </div>
+<div class="status" id="status"></div>
 
-    <div class="card">
-      <img src="https://via.placeholder.com/250x200.png?text=Shoe+3" alt="Shoe 3">
-      <h3>Sports Shoes</h3>
-      <p>$60</p>
-      <a href="#" class="btn">Buy Now</a>
-    </div>
+<div class="container">
 
-    <div class="card">
-      <img src="https://via.placeholder.com/250x200.png?text=Shoe+4" alt="Shoe 4">
-      <h3>Leather Shoes</h3>
-      <p>$80</p>
-      <a href="#" class="btn">Buy Now</a>
-    </div>
+<div class="card">
+<img src="https://placehold.co/250x200?text=Shoe+1">
+<h3>Running Shoes</h3>
+<p>$50</p>
+<button class="btn" onclick="buyShoe(1)">Buy Now</button>
+</div>
 
-    <div class="card">
-      <img src="https://via.placeholder.com/250x200.png?text=Shoe+5" alt="Shoe 5">
-      <h3>High Tops</h3>
-      <p>$55</p>
-      <a href="#" class="btn">Buy Now</a>
-    </div>
+<div class="card">
+<img src="https://placehold.co/250x200?text=Shoe+2">
+<h3>Casual Sneakers</h3>
+<p>$45</p>
+<button class="btn" onclick="buyShoe(2)">Buy Now</button>
+</div>
 
-    <div class="card">
-      <img src="https://via.placeholder.com/250x200.png?text=Shoe+6" alt="Shoe 6">
-      <h3>Slip Ons</h3>
-      <p>$40</p>
-      <a href="#" class="btn">Buy Now</a>
-    </div>
+<div class="card">
+<img src="https://placehold.co/250x200?text=Shoe+3">
+<h3>Sports Shoes</h3>
+<p>$60</p>
+<button class="btn" onclick="buyShoe(3)">Buy Now</button>
+</div>
 
-    <div class="card">
-      <img src="https://via.placeholder.com/250x200.png?text=Shoe+7" alt="Shoe 7">
-      <h3>Canvas Shoes</h3>
-      <p>$35</p>
-      <a href="#" class="btn">Buy Now</a>
-    </div>
+<div class="card">
+<img src="https://placehold.co/250x200?text=Shoe+4">
+<h3>Leather Shoes</h3>
+<p>$80</p>
+<button class="btn" onclick="buyShoe(4)">Buy Now</button>
+</div>
 
-    <div class="card">
-      <img src="https://via.placeholder.com/250x200.png?text=Shoe+8" alt="Shoe 8">
-      <h3>Formal Shoes</h3>
-      <p>$90</p>
-      <a href="#" class="btn">Buy Now</a>
-    </div>
+<div class="card">
+<img src="https://placehold.co/250x200?text=Shoe+5">
+<h3>High Tops</h3>
+<p>$55</p>
+<button class="btn" onclick="buyShoe(5)">Buy Now</button>
+</div>
 
-    <div class="card">
-      <img src="https://via.placeholder.com/250x200.png?text=Shoe+9" alt="Shoe 9">
-      <h3>Walking Shoes</h3>
-      <p>$48</p>
-      <a href="#" class="btn">Buy Now</a>
-    </div>
+<div class="card">
+<img src="https://placehold.co/250x200?text=Shoe+6">
+<h3>Slip Ons</h3>
+<p>$40</p>
+<button class="btn" onclick="buyShoe(6)">Buy Now</button>
+</div>
 
-    <div class="card">
-      <img src="https://via.placeholder.com/250x200.png?text=Shoe+10" alt="Shoe 10">
-      <h3>Training Shoes</h3>
-      <p>$65</p>
-      <a href="#" class="btn">Buy Now</a>
-    </div>
-  </div>
+<div class="card">
+<img src="https://placehold.co/250x200?text=Shoe+7">
+<h3>Canvas Shoes</h3>
+<p>$35</p>
+<button class="btn" onclick="buyShoe(7)">Buy Now</button>
+</div>
+
+<div class="card">
+<img src="https://placehold.co/250x200?text=Shoe+8">
+<h3>Formal Shoes</h3>
+<p>$90</p>
+<button class="btn" onclick="buyShoe(8)">Buy Now</button>
+</div>
+
+<div class="card">
+<img src="https://placehold.co/250x200?text=Shoe+9">
+<h3>Walking Shoes</h3>
+<p>$48</p>
+<button class="btn" onclick="buyShoe(9)">Buy Now</button>
+</div>
+
+<div class="card">
+<img src="https://placehold.co/250x200?text=Shoe+10">
+<h3>Training Shoes</h3>
+<p>$65</p>
+<button class="btn" onclick="buyShoe(10)">Buy Now</button>
+</div>
+
+</div>
+
+<script>
+
+function buyShoe(id){
+
+fetch("http://localhost:5000/buy",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+shoe_id:id
+})
+})
+.then(res=>{
+if(!res.ok){
+throw new Error("API error")
+}
+return res.json()
+})
+.then(data=>{
+document.getElementById("status").innerText="Order placed successfully!"
+})
+.catch(err=>{
+console.log(err)
+document.getElementById("status").innerText="Order failed"
+})
+
+}
+
+</script>
+
 </body>
 </html>

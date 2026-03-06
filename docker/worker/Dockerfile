@@ -1,7 +1,10 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY worker.py .
+COPY app/backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["python","worker.py"]
+COPY app/worker/worker.py .
+
+CMD ["python","-u","worker.py"]
