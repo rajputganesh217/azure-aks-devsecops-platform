@@ -142,12 +142,7 @@ Browser image
         ├── terraform.tfvars
         └── variables.tf
 
-
-Author
-
-Mojeed Tijani
-
-Azure Cloud Engineer  
+  
 
 Certifications
 
