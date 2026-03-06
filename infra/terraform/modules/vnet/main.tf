@@ -32,7 +32,7 @@ resource "azurerm_network_security_group" "public_nsg" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
-  
+
   security_rule {
     name                       = "AllowHTTPSInbound"
     priority                   = 110

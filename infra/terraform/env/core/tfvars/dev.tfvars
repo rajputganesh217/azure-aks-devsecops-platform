@@ -10,7 +10,7 @@ vm_size    = "Standard_D4s_v5"
 
 acr_name = "mydevopsacr123"
 
-environment = "dev"
+environment        = "dev"
 vnet_address_space = ["10.1.0.0/16"]
 public_subnets = {
   "subnet-public-az1" = "10.1.1.0/24"

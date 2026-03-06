@@ -10,7 +10,7 @@ vm_size    = "Standard_DS2_v2"
 
 acr_name = "mydevopsacrprod123"
 
-environment = "prod"
+environment        = "prod"
 vnet_address_space = ["10.3.0.0/16"]
 public_subnets = {
   "subnet-public-az1" = "10.3.1.0/24"
