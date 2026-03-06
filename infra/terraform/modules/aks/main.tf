@@ -5,10 +5,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
   dns_prefix          = var.dns_prefix
 
   default_node_pool {
-    name       = "system"
-    node_count = var.node_count
-    vm_size    = var.vm_size
-    max_pods   = 30
+    name           = "system"
+    node_count     = var.node_count
+    vm_size        = var.vm_size
+    max_pods       = 30
+    vnet_subnet_id = var.vnet_subnet_id
   }
 
   private_cluster_enabled = true

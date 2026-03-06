@@ -26,6 +26,18 @@ module "log_analytics" {
   resource_group_name = module.rg.rg_name
 }
 ############################################
+# Virtual Network (Hub and Spoke)
+############################################
+
+module "vnet" {
+  source = "../../modules/vnet"
+
+  resource_group_name = module.rg.rg_name
+  location            = var.location
+  vnet_name           = "devsecops-vnet-${random_string.suffix.result}"
+}
+
+############################################
 # Azure Container Registry
 ############################################
 
@@ -51,6 +63,7 @@ module "aks" {
   node_count                 = var.node_count
   vm_size                    = var.vm_size
   log_analytics_workspace_id = module.log_analytics.workspace_id
+  vnet_subnet_id             = module.vnet.app_subnet_ids["subnet-private-app-az1"]
 }
 
 ############################################
