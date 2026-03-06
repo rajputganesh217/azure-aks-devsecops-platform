@@ -81,18 +81,12 @@ pipeline {
             }
         }
 
-        stage('Terraform Format') {
-            steps {
-                script {
-                    terraformCmd("fmt")
-                }
-            }
-        }
-
         stage('Terraform Validate') {
             steps {
                 script {
-                    terraformCmd("validate")
+                    dir("${env.TF_DIR}") {
+                        sh "terraform validate"
+                    }
                 }
             }
         }
