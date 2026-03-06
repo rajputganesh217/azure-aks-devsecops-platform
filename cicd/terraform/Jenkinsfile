@@ -71,24 +71,18 @@ stages {
     stage('Choose Action') {
         steps {
             script {
-                env.ACTION = input(
+                def action = input(
                     message: 'Select Terraform Action',
                     parameters: [
                         choice(
                             name: 'ACTION',
                             choices: ['apply', 'destroy'],
-                            description: 'Choose whether to apply or destroy infrastructure'
+                            description: 'Choose apply or destroy'
                         )
                     ]
                 )
-            }
-        }
-    }
 
-    stage('Execute Terraform') {
-        steps {
-            script {
-                if (env.ACTION == 'apply') {
+                if (action == 'apply') {
                     terraformCmd('apply -auto-approve')
                 } else {
                     terraformCmd('destroy -auto-approve')
