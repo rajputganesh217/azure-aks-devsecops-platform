@@ -1,166 +1,109 @@
 def terraformCmd(cmd) {
-    dir("${env.TF_DIR}") {
-        sh "terraform ${cmd}"
-    }
+dir("${env.TF_DIR}") {
+sh "terraform ${cmd}"
+}
 }
 
 pipeline {
 
-    agent any
+```
+agent any
 
-    environment {
-        TF_DIR = "infra/terraform/env/dev"
+environment {
+    TF_DIR = "infra/terraform/env/dev"
+}
+
+stages {
+
+    stage('Checkout Code') {
+        steps {
+            checkout scm
+        }
     }
 
-    stages {
-
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
+    stage('Prepare Security Folders') {
+        steps {
+            sh '''
+            mkdir -p security/reports/gitleaks
+            mkdir -p security/reports/checkov
+            '''
         }
-
-        stage('Prepare Security Folders') {
-            steps {
-                sh '''
-                mkdir -p security/reports/gitleaks
-                mkdir -p security/reports/checkov
-                '''
-            }
-        }
-
-        stage('Gitleaks Scan') {
-
-            steps {
-
-                script {
-
-                    sh '''
-
-                    DATE=$(date +%Y%m%d_%H%M%S)
-
-                    gitleaks detect \
-                    --source . \
-                    --config security/configs/gitleaks.toml \
-                    --report-format json \
-                    --report-path security/reports/gitleaks/gitleaks_$DATE.json \
-                    || true
-
-                    '''
-                }
-            }
-        }
-
-        stage('Checkov Scan') {
-
-            steps {
-
-                script {
-
-                    sh '''
-
-                    DATE=$(date +%Y%m%d_%H%M%S)
-
-                    checkov \
-                    -d infra/terraform \
-                    --config-file security/configs/checkov.yaml \
-                    -o json \
-                    > security/reports/checkov/checkov_$DATE.json \
-                    || true
-
-                    '''
-                }
-            }
-        }
-
-        stage('Generate TFVARS') {
-
-            steps {
-
-                withCredentials([
-
-                    string(credentialsId: 'AZURE_SUBSCRIPTION_ID', variable: 'SUB'),
-                    string(credentialsId: 'AZURE_TENANT_ID', variable: 'TENANT'),
-                    string(credentialsId: 'AZURE_CLIENT_ID', variable: 'CLIENT'),
-                    string(credentialsId: 'AZURE_CLIENT_SECRET', variable: 'SECRET'),
-
-                    string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB'),
-                    string(credentialsId: 'POSTGRES_USER', variable: 'POSTGRES_USER'),
-                    string(credentialsId: 'POSTGRES_PASSWORD', variable: 'POSTGRES_PASSWORD'),
-                    string(credentialsId: 'DB_HOST', variable: 'DB_HOST')
-
-                ]) {
-
-                    dir("${TF_DIR}") {
-
-                        sh '''
-
-                        cat <<EOF > jenkins.auto.tfvars
-
-subscription_id = "$SUB"
-tenant_id       = "$TENANT"
-client_id       = "$CLIENT"
-client_secret   = "$SECRET"
-
-postgres_db       = "$POSTGRES_DB"
-postgres_user     = "$POSTGRES_USER"
-postgres_password = "$POSTGRES_PASSWORD"
-db_host           = "$DB_HOST"
-
-EOF
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Terraform Init') {
-
-            steps {
-                script {
-                    terraformCmd("init")
-                }
-            }
-        }
-
-        stage('Terraform Validate') {
-
-            steps {
-                script {
-                    terraformCmd("validate")
-                }
-            }
-        }
-
-        stage('Terraform Plan') {
-
-            steps {
-                script {
-                    terraformCmd("plan")
-                }
-            }
-        }
-
-        stage('Terraform Apply') {
-
-            steps {
-
-                input message: "Approve Infrastructure Creation?"
-
-                script {
-                    terraformCmd("apply -auto-approve")
-                }
-            }
-        }
-
-        stage('Archive Security Reports') {
-
-            steps {
-
-                archiveArtifacts artifacts: 'security/reports/**/*.json', fingerprint: true
-
-            }
-        }
-
     }
+
+    stage('Gitleaks Scan') {
+        steps {
+            sh '''
+            gitleaks detect \
+            --source . \
+            --config security/configs/gitleaks.toml \
+            --report-format json \
+            --report-path security/reports/gitleaks/gitleaks-report.json
+            '''
+        }
+    }
+
+    stage('Checkov Scan') {
+        steps {
+            sh '''
+            checkov -d infra/terraform \
+            --config-file security/configs/checkov.yaml \
+            -o json > security/reports/checkov/checkov-report.json
+            '''
+        }
+    }
+
+    stage('Terraform Init') {
+        steps {
+            script {
+                terraformCmd('init')
+            }
+        }
+    }
+
+    stage('Terraform Plan') {
+        steps {
+            script {
+                terraformCmd('plan')
+            }
+        }
+    }
+
+    stage('Choose Action') {
+        steps {
+            script {
+                env.ACTION = input(
+                    message: 'Select Terraform Action',
+                    parameters: [
+                        choice(
+                            name: 'ACTION',
+                            choices: ['apply', 'destroy'],
+                            description: 'Choose whether to apply or destroy infrastructure'
+                        )
+                    ]
+                )
+            }
+        }
+    }
+
+    stage('Execute Terraform') {
+        steps {
+            script {
+                if (env.ACTION == 'apply') {
+                    terraformCmd('apply -auto-approve')
+                } else {
+                    terraformCmd('destroy -auto-approve')
+                }
+            }
+        }
+    }
+
+}
+
+post {
+    always {
+        archiveArtifacts artifacts: 'security/reports/**/*.json', fingerprint: true
+    }
+}
+```
+
 }
