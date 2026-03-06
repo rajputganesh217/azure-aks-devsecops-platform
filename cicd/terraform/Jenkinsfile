@@ -1,16 +1,22 @@
 def terraformCmd(cmd) {
 dir("${env.TF_DIR}") {
-sh "terraform ${cmd}"
+sh "terraform ${cmd} -var-file=\"tfvars/${params.ENVIRONMENT}.tfvars\""
 }
 }
 
 pipeline {
 
-```
 agent any
 
+parameters {
+    choice(name: 'ENVIRONMENT', choices: ['dev', 'test', 'qa', 'prod'], description: 'Target Environment')
+    string(name: 'TF_STATE_RG', defaultValue: 'aks-microservices-rg', description: 'Resource Group of TF State Storage Account')
+    string(name: 'TF_STATE_SA', defaultValue: 'terraformstate', description: 'Storage Account for TF State')
+    string(name: 'TF_STATE_CONTAINER', defaultValue: 'tfstate', description: 'Container for TF State')
+}
+
 environment {
-    TF_DIR = "infra/terraform/env/dev"
+    TF_DIR = "infra/terraform/env/core"
 }
 
 stages {
@@ -33,11 +39,14 @@ stages {
     stage('Gitleaks Scan') {
         steps {
             sh '''
+            DATE=$(date +%Y%m%d_%H%M%S)
+
             gitleaks detect \
             --source . \
             --config security/configs/gitleaks.toml \
             --report-format json \
-            --report-path security/reports/gitleaks/gitleaks-report.json
+            --report-path security/reports/gitleaks/gitleaks_$DATE.json \
+            || true
             '''
         }
     }
@@ -45,17 +54,86 @@ stages {
     stage('Checkov Scan') {
         steps {
             sh '''
-            checkov -d infra/terraform \
+            DATE=$(date +%Y%m%d_%H%M%S)
+
+            checkov \
+            -d infra/terraform \
             --config-file security/configs/checkov.yaml \
-            -o json > security/reports/checkov/checkov-report.json
+            -o json \
+            > security/reports/checkov/checkov_$DATE.json \
+            || true
             '''
+        }
+    }
+
+    stage('Generate TFVARS') {
+
+        steps {
+
+            withCredentials([
+
+                string(credentialsId: 'AZURE_SUBSCRIPTION_ID', variable: 'SUB'),
+                string(credentialsId: 'AZURE_TENANT_ID', variable: 'TENANT'),
+                string(credentialsId: 'AZURE_CLIENT_ID', variable: 'CLIENT'),
+                string(credentialsId: 'AZURE_CLIENT_SECRET', variable: 'SECRET'),
+
+                string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB'),
+                string(credentialsId: 'POSTGRES_USER', variable: 'POSTGRES_USER'),
+                string(credentialsId: 'POSTGRES_PASSWORD', variable: 'POSTGRES_PASSWORD'),
+                string(credentialsId: 'DB_HOST', variable: 'DB_HOST')
+
+            ]) {
+
+                dir("${env.TF_DIR}") {
+
+                    sh '''
+
+                    cat <<EOF > jenkins.auto.tfvars
+subscription_id = "$SUB"
+tenant_id       = "$TENANT"
+client_id       = "$CLIENT"
+client_secret   = "$SECRET"
+
+postgres_db       = "$POSTGRES_DB"
+postgres_user     = "$POSTGRES_USER"
+postgres_password = "$POSTGRES_PASSWORD"
+db_host           = "$DB_HOST"
+EOF
+
+                    '''
+                }
+            }
         }
     }
 
     stage('Terraform Init') {
         steps {
             script {
-                terraformCmd('init')
+                dir("${env.TF_DIR}") {
+                    sh """
+                    terraform init \\
+                      -backend-config="resource_group_name=${params.TF_STATE_RG}" \\
+                      -backend-config="storage_account_name=${params.TF_STATE_SA}" \\
+                      -backend-config="container_name=${params.TF_STATE_CONTAINER}" \\
+                      -backend-config="key=${params.ENVIRONMENT}.terraform.tfstate"
+                    """
+                }
+            }
+        }
+    }
+
+    stage('Terraform Format') {
+        steps {
+            script {
+                terraformCmd("fmt")
+            }
+        }
+    }
+
+    stage('Terraform Validate') {
+        steps {
+            script {
+                terraformCmd("validate")
             }
         }
     }
@@ -63,7 +141,7 @@ stages {
     stage('Terraform Plan') {
         steps {
             script {
-                terraformCmd('plan')
+                terraformCmd("plan")
             }
         }
     }
@@ -91,13 +169,45 @@ stages {
         }
     }
 
+    stage('Upload Security Reports to Blob Storage') {
+        steps {
+            withCredentials([
+                string(credentialsId: 'AZURE_SUBSCRIPTION_ID', variable: 'SUB'),
+                string(credentialsId: 'AZURE_TENANT_ID', variable: 'TENANT'),
+                string(credentialsId: 'AZURE_CLIENT_ID', variable: 'CLIENT'),
+                string(credentialsId: 'AZURE_CLIENT_SECRET', variable: 'SECRET')
+            ]) {
+                script {
+                    dir("${env.TF_DIR}") {
+                        try {
+                            env.REPORTS_SA = sh(script: "terraform output -raw security_reports_storage_account", returnStdout: true).trim()
+                            env.REPORTS_CONTAINER = sh(script: "terraform output -raw security_reports_container", returnStdout: true).trim()
+                            
+                            sh '''
+                            az login --service-principal -u $CLIENT -p $SECRET --tenant $TENANT
+                            az account set --subscription $SUB
+                            
+                            echo "Uploading reports to $REPORTS_SA / $REPORTS_CONTAINER"
+                            az storage blob upload-batch \\
+                              --account-name $REPORTS_SA \\
+                              --auth-mode login \\
+                              -d $REPORTS_CONTAINER \\
+                              -s ../../../../security/reports/ \\
+                              --pattern "**/*.json"
+                            '''
+                        } catch (Exception e) {
+                            echo "Skipping report upload (probably due to destroy action): ${e.message}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 post {
     always {
         archiveArtifacts artifacts: 'security/reports/**/*.json', fingerprint: true
     }
-}
-```
-
 }

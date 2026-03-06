@@ -11,6 +11,13 @@ resource "azurerm_kubernetes_cluster" "aks" {
     max_pods   = 30
   }
 
+  private_cluster_enabled = true
+
+  network_profile {
+    network_plugin = "azure"
+    network_policy = "calico"
+  }
+
   identity {
     type = "SystemAssigned"
   }

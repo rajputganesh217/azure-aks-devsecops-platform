@@ -1,0 +1,95 @@
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME         = "backend"
+        IMAGE_NAME       = "mydevopsacrprod123.azurecr.io/${APP_NAME}"
+        DOCKER_CREDS_ID  = "azure-acr-credentials"
+        SONAR_PROJECT_KEY = "backend-service"
+        SONAR_SERVER_ID  = "SonarQubeServer"
+        APP_DIR          = "app/backend"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('SonarQube Static Code Analysis') {
+            steps {
+                dir("${env.APP_DIR}") {
+                    withSonarQubeEnv("${env.SONAR_SERVER_ID}") {
+                        // Include Python-specific properties
+                        sh """
+                        sonar-scanner \
+                          -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} \
+                          -Dsonar.sources=. \
+                          -Dsonar.language=py \
+                          -Dsonar.host.url=\$SONAR_HOST_URL \
+                          -Dsonar.login=\$SONAR_AUTH_TOKEN
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('OWASP Dependency-Check') {
+            steps {
+                dir("${env.APP_DIR}") {
+                    // Python projects check requirements.txt
+                    dependencyCheck additionalArguments: '--scan . --format ALL', odcInstallation: 'Default'
+                    dependencyCheckPublisher pattern: 'dependency-check-report.xml'
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                dir("${env.APP_DIR}") {
+                    script {
+                        dockerImage = docker.build("${env.IMAGE_NAME}:${env.BUILD_NUMBER}")
+                    }
+                }
+            }
+        }
+
+        stage('Trivy Image Scan') {
+            steps {
+                sh """
+                trivy image \
+                  --exit-code 1 \
+                  --severity HIGH,CRITICAL \
+                  --no-progress \
+                  ${env.IMAGE_NAME}:${env.BUILD_NUMBER}
+                """
+            }
+        }
+
+        stage('Docker Push to ACR') {
+            steps {
+                script {
+                    docker.withRegistry("https://mydevopsacrprod123.azurecr.io", "${env.DOCKER_CREDS_ID}") {
+                        dockerImage.push()
+                        dockerImage.push("latest")
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}

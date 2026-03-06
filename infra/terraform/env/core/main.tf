@@ -44,13 +44,13 @@ module "acr" {
 module "aks" {
   source = "../../modules/aks"
 
-  aks_name                    = var.aks_name
-  location                    = var.location
-  resource_group_name         = module.rg.rg_name
-  dns_prefix                  = var.dns_prefix
-  node_count                  = var.node_count
-  vm_size                     = var.vm_size
-  log_analytics_workspace_id  = module.log_analytics.workspace_id
+  aks_name                   = var.aks_name
+  location                   = var.location
+  resource_group_name        = module.rg.rg_name
+  dns_prefix                 = var.dns_prefix
+  node_count                 = var.node_count
+  vm_size                    = var.vm_size
+  log_analytics_workspace_id = module.log_analytics.workspace_id
 }
 
 ############################################
@@ -81,4 +81,16 @@ module "keyvault" {
   postgres_user     = var.postgres_user
   postgres_password = var.postgres_password
   db_host           = var.db_host
+}
+
+############################################
+# Storage Account for Security Reports
+############################################
+
+module "storage_account" {
+  source = "../../modules/storage-account"
+
+  storage_account_name = "devsecopsreports${random_string.suffix.result}"
+  location             = var.location
+  resource_group_name  = module.rg.rg_name
 }
