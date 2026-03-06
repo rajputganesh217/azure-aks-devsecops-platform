@@ -1,148 +1,334 @@
-# Azure Kubernetes Service (AKS) Microservices Architecture Deployment
+# Azure AKS DevSecOps Microservices Platform
 
-This project demonstrates deploying a containerized microservices application on **Azure Kubernetes Service (AKS)** using **Docker, Azure Container Registry (ACR), and Terraform**.
+This project demonstrates deploying a **containerized microservices application on Azure Kubernetes Service (AKS)** using **Terraform, Docker, Azure Container Registry (ACR), Jenkins CI/CD, and DevSecOps security tools**.
 
-The application consists of:
-
-- **Frontend** – HTML/CSS web application  
-- **Backend** – Python REST API  
-- **Database** – PostgreSQL  
+The platform follows a **DevSecOps pipeline approach** where infrastructure, containers, and security scans are automated.
 
 ---
 
-## Architecture Overview
+# Application Architecture
 
-- Azure Kubernetes Service (**AKS**) deployed in **Canada Central**
-- Azure Container Registry (**ACR**) for container image storage
-- Microservices deployed into a dedicated Kubernetes namespace
-- Frontend exposed using a **LoadBalancer** service
-- Backend and Database exposed internally using **ClusterIP**
+The application consists of **four containers**:
+
+| Service  | Description                         |
+| -------- | ----------------------------------- |
+| Frontend | Nginx static web UI                 |
+| Backend  | Python Flask REST API               |
+| Worker   | Background order processing service |
+| Database | PostgreSQL database                 |
 
 ---
 
-## Deployment Guide
+# Architecture Overview
 
-### Build Docker Images
+```
+User
+ │
+ ▼
+Frontend (Nginx)
+ │
+ ▼
+Backend API (Flask)
+ │
+ ▼
+PostgreSQL Database
+ │
+ ▼
+Worker Service
+```
 
-- docker build -t mojeed0088.azurecr.io/frontend:v1 ./frontend
-- docker build -t mojeed0088.azurecr.io/backend:v1 ./backend
+Infrastructure components:
 
-Built & containerized images
-   ![image showing built docker images](docs/docker-images.png)
+* Azure Kubernetes Service (**AKS**)
+* Azure Container Registry (**ACR**)
+* Terraform Infrastructure as Code
+* Jenkins CI/CD pipelines
+* DevSecOps security scanning tools
 
+---
 
-## Push Images to Azure Container Registry
+# DevSecOps Tools Used
 
-- docker push mojeed0088.azurecr.io/frontend:v1
-- docker push mojeed0088.azurecr.io/backend:v1
+| Tool                     | Purpose                          |
+| ------------------------ | -------------------------------- |
+| Jenkins                  | CI/CD automation                 |
+| Terraform                | Infrastructure provisioning      |
+| Docker                   | Containerization                 |
+| Kubernetes               | Container orchestration          |
+| Azure Container Registry | Container image registry         |
+| Gitleaks                 | Secret detection                 |
+| Trivy                    | Container vulnerability scanning |
+| Checkov                  | Infrastructure security scanning |
+| SonarQube                | Code quality scanning            |
+| OWASP ZAP                | Dynamic security testing         |
 
-Images in ACR
-![containers](docs/repository-image.png)
+---
 
+# Infrastructure
 
-![containers](docs/azurecr-repository.png)
+Infrastructure is provisioned using **Terraform**.
 
+Resources created:
 
-## Provisioned Azure Kubernetes Services (AKS) with Terraform
+* Resource Group
+* Azure Kubernetes Service (AKS)
+* Azure Container Registry (ACR)
+* Log Analytics Workspace
+* ACR → AKS role assignment
 
-- terraform plan
-![image showing terraform-plan](docs/terraform-plan-image.png)
+Region used:
 
-- terraform apply
-![image showing infrasructures provision after terraform apply](docs/resources-in-azure.png)
+```
+Canada Central
+```
 
+---
 
-## Deploy to Kubernetes
+# Build Docker Images
 
-- Apply the Kubernetes manifests in order:
-- kubectl apply -f k8s/database/
-- kubectl apply -f k8s/backend/
-- kubectl apply -f k8s/frontend/
+Run from project root.
 
+### Frontend
 
-## AKS Nodes and Pods After deployment
+```
+docker build -t frontend:v1 -f docker/frontend/Dockerfile .
+```
 
-kubectl get nodes 
-![containers](docs/kubectl-get-node-screenshot.png)
+### Backend
 
-kubectl get pods
-![Image showing all pos are running after deployment](docs/pods-running-screenshot.png)
+```
+docker build -t backend:v1 -f docker/backend/Dockerfile .
+```
 
+### Worker
 
-## Service Access
+```
+docker build -t worker:v1 -f docker/worker/Dockerfile .
+```
 
-- Frontend: Exposed via LoadBalancer (External IP)
-- Backend: Internal ClusterIP service
-- Database: Internal ClusterIP service
+---
 
-Service IPs
-![image showing the external ip address](docs/IPs-address.png)
+# Push Images to Azure Container Registry
 
+Example:
 
-## Application Access
+```
+docker tag backend:v1 <acr-name>.azurecr.io/backend:v1
+docker push <acr-name>.azurecr.io/backend:v1
+```
 
-Browser image
-![testing the frontend external ip on browser](docs/frontendapp-running-aks.png)
+Repeat for:
 
+```
+frontend
+worker
+```
 
-## Key Skills Demonstrated
+Images are stored in:
 
-- Azure Kubernetes Service (AKS)
-- Azure Container Registry (ACR)
-- Docker & Containerization
-- Kubernetes (Deployments, Services, Namespaces)
-- Infrastructure as Code with Terraform
-- Microservices Architecture
-- Cloud Networking & Load Balancing
+```
+Azure Container Registry (ACR)
+```
 
+---
 
-## Repository Structure
+# Provision Infrastructure with Terraform
 
-    ```
-    azure-aks-microservices
-    ├── README.md
-    ├── backend
-    │   ├── Dockerfile
-    │   ├── app.py
-    │   └── requirements.txt
-    ├── docs
-    │   ├── azurecr-repository.png
-    │   ├── docker-images.png
-    │   ├── frontendapp-running-aks.png
-    │   ├── kubectl-get-node-screenshot.png
-    │   ├── pods-running-screenshot.png
-    │   ├── repository-image.png
-    │   ├── resources-in-azure.png
-    │   └── terraform-plan-image.png
-    ├── frontend
-    │   ├── Dockerfile
-    │   ├── health.html
-    │   └── index.html
-    ├── k8s
-    │   ├── backend
-    │   │   ├── backend-deployment.yaml
-    │   │   └── backend-service.yaml
-    │   ├── database
-    │   │   ├── postgres-deployment.yaml
-    │   │   ├── postgres-pvc.yaml
-    │   │   ├── postgres-secret.example.yaml
-    │   │   ├── postgres-secret.yaml
-    │   │   └── postgres-service.yaml
-    │   ├── frontend
-    │   │   ├── deployment.yaml
-    │   │   └── service.yaml
-    │   └── namespaces.yaml
-    └── terraform
-        ├── acr.tf
-        ├── main.tf
-        ├── outputs.tf
-        ├── provider.tf
-        ├── terraform.tfstate
-        ├── terraform.tfstate.backup
-        ├── terraform.tfvars
-        └── variables.tf
+Navigate to:
 
-  
+```
+infra/terraform/env/dev
+```
 
+Initialize Terraform:
 
+```
+terraform init
+```
 
+Check the plan:
+
+```
+terraform plan
+```
+
+Apply infrastructure:
+
+```
+terraform apply
+```
+
+Resources will be created in Azure.
+
+---
+
+# Kubernetes Deployment
+
+Apply Kubernetes manifests.
+
+### Namespace
+
+```
+kubectl apply -f kubernetes/namespaces.yaml
+```
+
+### Database
+
+```
+kubectl apply -f kubernetes/database/
+```
+
+### Backend
+
+```
+kubectl apply -f kubernetes/backend/
+```
+
+### Worker
+
+```
+kubectl apply -f kubernetes/worker/
+```
+
+### Frontend
+
+```
+kubectl apply -f kubernetes/frontend/
+```
+
+---
+
+# Verify Deployment
+
+Check nodes:
+
+```
+kubectl get nodes
+```
+
+Check pods:
+
+```
+kubectl get pods -n microservices
+```
+
+Check services:
+
+```
+kubectl get svc -n microservices
+```
+
+---
+
+# Application Access
+
+Frontend is exposed via **LoadBalancer service**.
+
+Example:
+
+```
+http://<external-ip>
+```
+
+Backend and database are exposed internally using **ClusterIP** services.
+
+---
+
+# Security Scans
+
+Security scans run as part of Jenkins pipelines.
+
+Reports generated inside:
+
+```
+security/
+├── gitleaks-report.json
+└── checkov-report.json
+```
+
+Additional scans include:
+
+* Trivy container scan
+* SonarQube code scan
+* OWASP ZAP dynamic scan
+
+---
+
+# Repository Structure
+
+```
+azure-aks-devsecops-platform
+│
+├── app
+│   ├── backend
+│   │   ├── app.py
+│   │   └── requirements.txt
+│   │
+│   ├── frontend
+│   │   ├── health.html
+│   │   └── index.html
+│   │
+│   └── worker
+│       └── worker.py
+│
+├── docker
+│   ├── backend
+│   │   └── Dockerfile
+│   ├── frontend
+│   │   └── Dockerfile
+│   └── worker
+│       └── Dockerfile
+│
+├── kubernetes
+│   ├── backend
+│   ├── database
+│   ├── frontend
+│   ├── worker
+│   └── namespaces.yaml
+│
+├── infra
+│   └── terraform
+│       ├── env
+│       │   └── dev
+│       └── modules
+│
+├── cicd
+│   ├── backend
+│   ├── frontend
+│   ├── worker
+│   ├── database
+│   └── terraform
+│
+├── security
+│   ├── gitleaks-report.json
+│   └── checkov-report.json
+│
+├── docs
+│   └── screenshots
+│
+└── README.md
+```
+
+---
+
+# Key Skills Demonstrated
+
+* Azure Kubernetes Service (AKS)
+* Azure Container Registry (ACR)
+* Docker containerization
+* Kubernetes deployments and services
+* Infrastructure as Code with Terraform
+* Jenkins CI/CD pipelines
+* DevSecOps security scanning
+* Microservices architecture
+* Cloud networking and load balancing
+
+---
+
+# Future Improvements
+
+* Helm charts for Kubernetes deployment
+* GitOps deployment with ArgoCD
+* Monitoring with Prometheus and Grafana
+* Azure Key Vault for secret management
+* Kubernetes Horizontal Pod Autoscaling
