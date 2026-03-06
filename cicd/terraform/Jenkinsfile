@@ -211,3 +211,7 @@ post {
         archiveArtifacts artifacts: 'security/reports/**/*.json', fingerprint: true
     }
 }
+<<<<<<< HEAD
+=======
+}
+>>>>>>> 8ea1c56 (Apply DevSecOps improvements)
