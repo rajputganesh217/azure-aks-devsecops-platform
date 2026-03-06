@@ -1,3 +1,7 @@
+############################################
+# Azure Authentication (Jenkins will pass)
+############################################
+
 variable "subscription_id" {
   type      = string
   sensitive = true
@@ -18,36 +22,65 @@ variable "client_secret" {
   sensitive = true
 }
 
+############################################
+# Infrastructure Configuration
+############################################
+
 variable "resource_group_name" {
-  type    = string
-  default = "aks-microservices-rg"
+  type = string
 }
 
 variable "location" {
-  type    = string
-  default = "canadacentral"
+  type = string
 }
+
+############################################
+# AKS Configuration
+############################################
 
 variable "aks_name" {
-  type    = string
-  default = "microservices-aks"
-}
-
-variable "acr_name" {
   type = string
 }
 
 variable "dns_prefix" {
-  type    = string
-  default = "microaks"
+  type = string
 }
 
 variable "node_count" {
-  type    = number
-  default = 1
+  type = number
 }
 
 variable "vm_size" {
-  type    = string
-  default = "standard_a2_v2"
+  type = string
+}
+
+############################################
+# Container Registry
+############################################
+
+variable "acr_name" {
+  type = string
+}
+############################################
+# Application Secrets (Coming from Jenkins)
+############################################
+
+variable "postgres_db" {
+  type      = string
+  sensitive = true
+}
+
+variable "postgres_user" {
+  type      = string
+  sensitive = true
+}
+
+variable "postgres_password" {
+  type      = string
+  sensitive = true
+}
+
+variable "db_host" {
+  type      = string
+  sensitive = true
 }

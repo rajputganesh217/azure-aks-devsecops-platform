@@ -1,28 +1,84 @@
+resource "random_string" "suffix" {
+  length  = 5
+  special = false
+  upper   = false
+}
+
+############################################
+# Resource Group
+############################################
+
 module "rg" {
-  source              = "../../modules/resource-group"
+  source = "../../modules/resource-group"
+
   resource_group_name = var.resource_group_name
   location            = var.location
 }
 
+############################################
+# Log Analytics
+############################################
+
 module "log_analytics" {
-  source              = "../../modules/log-analytics"
+  source = "../../modules/log-analytics"
+
+  location            = var.location
   resource_group_name = module.rg.rg_name
-  location            = module.rg.location
+}
+############################################
+# Azure Container Registry
+############################################
+
+module "acr" {
+  source = "../../modules/acr"
+
+  acr_name            = var.acr_name
+  location            = var.location
+  resource_group_name = module.rg.rg_name
 }
 
+############################################
+# AKS Cluster
+############################################
+
 module "aks" {
-  source                     = "../../modules/aks"
-  aks_name                   = var.aks_name
-  location                   = module.rg.location
-  resource_group_name        = module.rg.rg_name
-  dns_prefix                 = var.dns_prefix
-  node_count                 = var.node_count
-  vm_size                    = var.vm_size
-  log_analytics_workspace_id = module.log_analytics.workspace_id
+  source = "../../modules/aks"
+
+  aks_name                    = var.aks_name
+  location                    = var.location
+  resource_group_name         = module.rg.rg_name
+  dns_prefix                  = var.dns_prefix
+  node_count                  = var.node_count
+  vm_size                     = var.vm_size
+  log_analytics_workspace_id  = module.log_analytics.workspace_id
 }
-module "acr" {
-  source              = "../../modules/acr"
+
+############################################
+# ACR Pull Permission for AKS
+############################################
+
+module "acr_role" {
+  source = "../../modules/acr-role"
+
+  kubelet_identity    = module.aks.kubelet_identity
   acr_name            = var.acr_name
   resource_group_name = module.rg.rg_name
-  location            = module.rg.location
+}
+
+############################################
+# Key Vault
+############################################
+
+module "keyvault" {
+  source = "../../modules/keyvault"
+
+  keyvault_name       = "devsecops-kv-${random_string.suffix.result}"
+  location            = var.location
+  resource_group_name = module.rg.rg_name
+  tenant_id           = var.tenant_id
+
+  postgres_db       = var.postgres_db
+  postgres_user     = var.postgres_user
+  postgres_password = var.postgres_password
+  db_host           = var.db_host
 }
