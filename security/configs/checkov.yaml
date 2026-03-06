@@ -1,0 +1,15 @@
+framework:
+  - terraform
+
+skip-check:
+  - CKV_AZURE_35
+  - CKV_AZURE_117
+
+soft-fail: true
+
+download-external-modules: true
+
+output:
+  - json
+
+quiet: false

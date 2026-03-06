@@ -1,0 +1,23 @@
+title = "DevSecOps Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow common non-secret patterns"
+
+paths = [
+  '''\.gitignore''',
+  '''README\.md'''
+]
+
+regexes = [
+  '''example''',
+  '''test''',
+  '''dummy'''
+]
+
+stopwords = [
+  "password123",
+  "examplekey"
+]

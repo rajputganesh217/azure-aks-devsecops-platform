@@ -1,4 +1,11 @@
+def terraformCmd(cmd) {
+    dir("${env.TF_DIR}") {
+        sh "terraform ${cmd}"
+    }
+}
+
 pipeline {
+
     agent any
 
     environment {
@@ -9,29 +16,69 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git 'https://github.com/rajputganesh217/azure-aks-devsecops-platform.git'
+                checkout scm
             }
         }
 
-        stage('Terraform Init') {
+        stage('Prepare Security Folders') {
             steps {
-                dir("${TF_DIR}") {
-                    sh 'terraform init'
+                sh '''
+                mkdir -p security/reports/gitleaks
+                mkdir -p security/reports/checkov
+                '''
+            }
+        }
+
+        stage('Gitleaks Scan') {
+
+            steps {
+
+                script {
+
+                    sh '''
+
+                    DATE=$(date +%Y%m%d_%H%M%S)
+
+                    gitleaks detect \
+                    --source . \
+                    --config security/configs/gitleaks.toml \
+                    --report-format json \
+                    --report-path security/reports/gitleaks/gitleaks_$DATE.json \
+                    || true
+
+                    '''
                 }
             }
         }
 
-        stage('Terraform Validate') {
+        stage('Checkov Scan') {
+
             steps {
-                dir("${TF_DIR}") {
-                    sh 'terraform validate'
+
+                script {
+
+                    sh '''
+
+                    DATE=$(date +%Y%m%d_%H%M%S)
+
+                    checkov \
+                    -d infra/terraform \
+                    --config-file security/configs/checkov.yaml \
+                    -o json \
+                    > security/reports/checkov/checkov_$DATE.json \
+                    || true
+
+                    '''
                 }
             }
         }
 
-        stage('Terraform Plan') {
+        stage('Generate TFVARS') {
+
             steps {
+
                 withCredentials([
+
                     string(credentialsId: 'AZURE_SUBSCRIPTION_ID', variable: 'SUB'),
                     string(credentialsId: 'AZURE_TENANT_ID', variable: 'TENANT'),
                     string(credentialsId: 'AZURE_CLIENT_ID', variable: 'CLIENT'),
@@ -41,22 +88,55 @@ pipeline {
                     string(credentialsId: 'POSTGRES_USER', variable: 'POSTGRES_USER'),
                     string(credentialsId: 'POSTGRES_PASSWORD', variable: 'POSTGRES_PASSWORD'),
                     string(credentialsId: 'DB_HOST', variable: 'DB_HOST')
+
                 ]) {
 
                     dir("${TF_DIR}") {
 
-                        sh """
-                        terraform plan \
-                        -var="subscription_id=$SUB" \
-                        -var="tenant_id=$TENANT" \
-                        -var="client_id=$CLIENT" \
-                        -var="client_secret=$SECRET" \
-                        -var="postgres_db=$POSTGRES_DB" \
-                        -var="postgres_user=$POSTGRES_USER" \
-                        -var="postgres_password=$POSTGRES_PASSWORD" \
-                        -var="db_host=$DB_HOST"
-                        """
+                        sh '''
+
+                        cat <<EOF > jenkins.auto.tfvars
+
+subscription_id = "$SUB"
+tenant_id       = "$TENANT"
+client_id       = "$CLIENT"
+client_secret   = "$SECRET"
+
+postgres_db       = "$POSTGRES_DB"
+postgres_user     = "$POSTGRES_USER"
+postgres_password = "$POSTGRES_PASSWORD"
+db_host           = "$DB_HOST"
+
+EOF
+                        '''
                     }
+                }
+            }
+        }
+
+        stage('Terraform Init') {
+
+            steps {
+                script {
+                    terraformCmd("init")
+                }
+            }
+        }
+
+        stage('Terraform Validate') {
+
+            steps {
+                script {
+                    terraformCmd("validate")
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+
+            steps {
+                script {
+                    terraformCmd("plan")
                 }
             }
         }
@@ -67,33 +147,18 @@ pipeline {
 
                 input message: "Approve Infrastructure Creation?"
 
-                withCredentials([
-                    string(credentialsId: 'AZURE_SUBSCRIPTION_ID', variable: 'SUB'),
-                    string(credentialsId: 'AZURE_TENANT_ID', variable: 'TENANT'),
-                    string(credentialsId: 'AZURE_CLIENT_ID', variable: 'CLIENT'),
-                    string(credentialsId: 'AZURE_CLIENT_SECRET', variable: 'SECRET'),
-
-                    string(credentialsId: 'POSTGRES_DB', variable: 'POSTGRES_DB'),
-                    string(credentialsId: 'POSTGRES_USER', variable: 'POSTGRES_USER'),
-                    string(credentialsId: 'POSTGRES_PASSWORD', variable: 'POSTGRES_PASSWORD'),
-                    string(credentialsId: 'DB_HOST', variable: 'DB_HOST')
-                ]) {
-
-                    dir("${TF_DIR}") {
-
-                        sh """
-                        terraform apply -auto-approve \
-                        -var="subscription_id=$SUB" \
-                        -var="tenant_id=$TENANT" \
-                        -var="client_id=$CLIENT" \
-                        -var="client_secret=$SECRET" \
-                        -var="postgres_db=$POSTGRES_DB" \
-                        -var="postgres_user=$POSTGRES_USER" \
-                        -var="postgres_password=$POSTGRES_PASSWORD" \
-                        -var="db_host=$DB_HOST"
-                        """
-                    }
+                script {
+                    terraformCmd("apply -auto-approve")
                 }
+            }
+        }
+
+        stage('Archive Security Reports') {
+
+            steps {
+
+                archiveArtifacts artifacts: 'security/reports/**/*.json', fingerprint: true
+
             }
         }
 

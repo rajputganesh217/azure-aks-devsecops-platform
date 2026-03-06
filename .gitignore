@@ -23,3 +23,9 @@ __pycache__/
 .vscode/
 .idea/
 security/*.json
+*.tfvars
+*.auto.tfvars
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+security/reports/*
