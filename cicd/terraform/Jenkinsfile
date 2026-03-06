@@ -10,6 +10,7 @@ pipeline {
 
     environment {
         TF_DIR = "infra/terraform/env/core"
+        PATH   = "/var/lib/jenkins/.local/bin:${env.PATH}"
 
         // Azure Auth for Terraform Backend & Provider
         ARM_CLIENT_ID       = credentials('ARM_CLIENT_ID')
@@ -70,7 +71,7 @@ pipeline {
                 script {
                     dir("${env.TF_DIR}") {
                         sh """
-                        terraform init \\
+                        terraform init -reconfigure \\
                           -backend-config="resource_group_name=${params.TF_STATE_RG}" \\
                           -backend-config="storage_account_name=${params.TF_STATE_SA}" \\
                           -backend-config="container_name=${params.TF_STATE_CONTAINER}" \\
