@@ -52,6 +52,7 @@ pipeline {
                 dir("${env.APP_DIR}") {
                     withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
                         sh '''
+                        mkdir -p /var/lib/jenkins/dependency-check-data || true
                         rm -rf dependency-check dependency-check.zip dependency-check-report.xml || true
                         wget -q https://github.com/jeremylong/DependencyCheck/releases/download/v12.1.0/dependency-check-12.1.0-release.zip -O dependency-check.zip
                         unzip -q dependency-check.zip
@@ -59,6 +60,7 @@ pipeline {
                           --project "${APP_NAME}" \\
                           --scan . \\
                           --format XML \\
+                          --data /var/lib/jenkins/dependency-check-data \\
                           --out dependency-check-report.xml \\
                           --nvdApiKey $NVD_API_KEY \\
                           --nvdApiDelay 5000 || { echo "Dependency-Check encountered an error, continuing pipeline."; cat << 'EOF' > dependency-check-report.xml
