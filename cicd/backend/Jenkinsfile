@@ -112,11 +112,12 @@ EOF
                 az account set --subscription $AZURE_SUBSCRIPTION_ID
                 az aks get-credentials --resource-group $AKS_RESOURCE_GROUP --name $AKS_CLUSTER_NAME --overwrite-existing
                 
-                kubectl apply -f kubernetes/backend/backend-deployment.yaml
-                kubectl apply -f kubernetes/backend/backend-service.yaml
-                
-                kubectl set image deployment/backend backend=${IMAGE_NAME}:${BUILD_NUMBER}
-                kubectl rollout status deployment/backend
+                az aks command invoke \\
+                  --resource-group $AKS_RESOURCE_GROUP \\
+                  --name $AKS_CLUSTER_NAME \\
+                  --command "kubectl apply -f backend-deployment.yaml && kubectl apply -f backend-service.yaml && kubectl set image deployment/backend backend=${IMAGE_NAME}:${BUILD_NUMBER} && kubectl rollout status deployment/backend" \\
+                  --file kubernetes/backend/backend-deployment.yaml \\
+                  --file kubernetes/backend/backend-service.yaml
                 '''
             }
         }
