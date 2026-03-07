@@ -47,25 +47,26 @@ pipeline {
             }
         }
 
-stage('OWASP Dependency Check') {
-    steps {
-        dir('app/backend') {
-            withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
-                sh '''
-                wget -q https://github.com/jeremylong/DependencyCheck/releases/download/v9.0.9/dependency-check-9.0.9-release.zip -O dependency-check.zip
-                unzip -q dependency-check.zip
-                ./dependency-check/bin/dependency-check.sh \
-                  --project backend \
-                  --scan . \
-                  --format XML \
-                  --out dependency-check-report.xml \
-                  --nvdApiKey $NVD_API_KEY \
-                  --nvdApiDelay 5000
-                '''
+        stage('OWASP Dependency Check') {
+            steps {
+                dir("${env.APP_DIR}") {
+                    withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
+                        sh '''
+                        wget -q https://github.com/jeremylong/DependencyCheck/releases/download/v12.1.0/dependency-check-12.1.0-release.zip -O dependency-check.zip
+                        unzip -q dependency-check.zip
+                        ./dependency-check/bin/dependency-check.sh \\
+                          --project "${APP_NAME}" \\
+                          --scan . \\
+                          --format XML \\
+                          --out dependency-check-report.xml \\
+                          --nvdApiKey $NVD_API_KEY \\
+                          --nvdApiDelay 5000
+                        '''
+                        dependencyCheckPublisher pattern: 'dependency-check-report.xml'
+                    }
+                }
             }
         }
-    }
-}
 
         stage('Docker Build') {
             steps {
