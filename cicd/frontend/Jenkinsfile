@@ -16,6 +16,7 @@ pipeline {
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
         AKS_RESOURCE_GROUP    = "aks-microservices-rg"
         AKS_CLUSTER_NAME      = "microservices-aks"
+        NVD_API_KEY           = credentials('NVD_API_KEY')
     }
 
     stages {
@@ -53,7 +54,7 @@ pipeline {
                     # Download and run OWASP Dependency-Check CLI manually to avoid Jenkins plugin path issues
                     wget -qO- https://github.com/jeremylong/DependencyCheck/releases/download/v9.0.9/dependency-check-9.0.9-release.zip > dependency-check.zip
                     unzip -q dependency-check.zip
-                    ./dependency-check/bin/dependency-check.sh --project "${APP_NAME}" --scan . --format XML --out dependency-check-report.xml
+                    ./dependency-check/bin/dependency-check.sh --project "${APP_NAME}" --scan . --format XML --out dependency-check-report.xml --nvdApiKey $NVD_API_KEY
                     '''
                     dependencyCheckPublisher pattern: 'dependency-check-report.xml'
                 }
