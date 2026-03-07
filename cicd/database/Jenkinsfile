@@ -11,10 +11,9 @@ pipeline {
         AKS_CLUSTER_NAME      = "microservices-aks"
         
         // Database credentials for secret generation
-        // Ideally these should also be fetched from Jenkins credentials or Azure Key Vault in prod
-        DB_USER               = "postgres"
-        DB_PASSWORD           = "password123"
-        DB_NAME               = "shoedb"
+        POSTGRES_USER         = credentials('POSTGRES_USER')
+        POSTGRES_PASSWORD     = credentials('POSTGRES_PASSWORD')
+        POSTGRES_DB           = credentials('POSTGRES_DB')
     }
 
     stages {
@@ -28,7 +27,7 @@ pipeline {
                 az aks command invoke \\
                   --resource-group $AKS_RESOURCE_GROUP \\
                   --name $AKS_CLUSTER_NAME \\
-                  --command "kubectl delete secret postgres-secret --ignore-not-found && kubectl create secret generic postgres-secret --from-literal=POSTGRES_DB=${DB_NAME} --from-literal=POSTGRES_USER=${DB_USER} --from-literal=POSTGRES_PASSWORD=${DB_PASSWORD}"
+                  --command "kubectl delete secret postgres-secret --ignore-not-found && kubectl create secret generic postgres-secret --from-literal=POSTGRES_DB=${POSTGRES_DB} --from-literal=POSTGRES_USER=${POSTGRES_USER} --from-literal=POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
                 
                 # Apply Database Deployment and Service
                 az aks command invoke \\
