@@ -19,12 +19,6 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
         stage('Gitleaks Scan') {
             steps {
                 sh '''
@@ -37,7 +31,7 @@ pipeline {
             steps {
                 dir("${env.APP_DIR}") {
                     withSonarQubeEnv("${env.SONAR_SERVER_ID}") {
-                        sh "sonar-scanner -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} -Dsonar.sources=."
+                        sh "/opt/sonar-scanner/bin/sonar-scanner -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} -Dsonar.sources=."
                     }
                 }
             }
