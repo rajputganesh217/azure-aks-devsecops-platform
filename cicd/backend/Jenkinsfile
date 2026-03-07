@@ -47,19 +47,25 @@ pipeline {
             }
         }
 
-        stage('OWASP Dependency-Check') {
-            steps {
-                dir("${env.APP_DIR}") {
-                    sh '''
-                    # Download and run OWASP Dependency-Check CLI manually to avoid Jenkins plugin path issues
-                    wget -qO- https://github.com/jeremylong/DependencyCheck/releases/download/v9.0.9/dependency-check-9.0.9-release.zip > dependency-check.zip
-                    unzip -q dependency-check.zip
-                    ./dependency-check/bin/dependency-check.sh --project "${APP_NAME}" --scan . --format XML --out dependency-check-report.xml --nvdApiKey $NVD_API_KEY
-                    '''
-                    dependencyCheckPublisher pattern: 'dependency-check-report.xml'
-                }
+stage('OWASP Dependency Check') {
+    steps {
+        dir('app/backend') {
+            withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
+                sh '''
+                wget -q https://github.com/jeremylong/DependencyCheck/releases/download/v9.0.9/dependency-check-9.0.9-release.zip -O dependency-check.zip
+                unzip -q dependency-check.zip
+                ./dependency-check/bin/dependency-check.sh \
+                  --project backend \
+                  --scan . \
+                  --format XML \
+                  --out dependency-check-report.xml \
+                  --nvdApiKey $NVD_API_KEY \
+                  --nvdApiDelay 5000
+                '''
             }
         }
+    }
+}
 
         stage('Docker Build') {
             steps {
