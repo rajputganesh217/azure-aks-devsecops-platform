@@ -61,7 +61,10 @@ pipeline {
                           --format XML \\
                           --out dependency-check-report.xml \\
                           --nvdApiKey $NVD_API_KEY \\
-                          --nvdApiDelay 5000 || { echo "Dependency-Check encountered an error, continuing pipeline."; echo \'<?xml version="1.0"?><analysis xmlns="https://jeremylong.github.io/DependencyCheck/dependency-check.3.1.xsd"><scanInfo></scanInfo><projectInfo><name>Failed Scan Default</name><reportDate>2023-01-01T00:00:00.000Z</reportDate><credits>This report contains no findings due to an NVD API update error.</credits></projectInfo><dependencies></dependencies></analysis>\' > dependency-check-report.xml; }
+                          --nvdApiDelay 5000 || { echo "Dependency-Check encountered an error, continuing pipeline."; cat << 'EOF' > dependency-check-report.xml
+<?xml version="1.0"?><analysis xmlns="https://jeremylong.github.io/DependencyCheck/dependency-check.3.1.xsd"><scanInfo></scanInfo><projectInfo><name>Failed Scan Default</name><reportDate>2023-01-01T00:00:00.000Z</reportDate><credits>This report contains no findings due to an NVD API update error.</credits></projectInfo><dependencies></dependencies></analysis>
+EOF
+}
                         '''
                         dependencyCheckPublisher pattern: 'dependency-check-report.xml'
                     }
@@ -116,7 +119,6 @@ pipeline {
                 '''
             }
         }
-    }
         
         stage('Upload Security Reports to Azure Storage') {
             steps {
