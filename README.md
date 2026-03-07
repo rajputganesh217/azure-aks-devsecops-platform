@@ -7,10 +7,70 @@ The goal of this platform is to prove that modern applications can be delivered 
 
 ## 2️⃣ Architecture Overview
 The platform seamlessly blends Azure Cloud Infrastructure with specialized DevSecOps orchestration:
-- **Infrastructure Layer**: Fully provisioned via **Terraform**. Establish a secure Hub-and-Spoke Virtual Network, isolated subnets, a Private Azure Kubernetes Service (AKS) cluster, an Azure Container Registry (ACR), and secure Azure Blob Storage for security compliance reporting.
+- **Infrastructure Layer**: Fully provisioned via **Terraform**. Establishes a Secure Tiered Virtual Network Architecture, isolated subnets, a Private Azure Kubernetes Service (AKS) cluster, an Azure Container Registry (ACR), and secure Azure Blob Storage for security compliance reporting.
 - **Orchestration Layer**: **AKS** handles the container orchestration. It's deployed as a private cluster, meaning its API server is not exposed to the public internet.
 - **CI/CD Layer**: **Jenkins** acts as the central orchestrator, executing declarative pipelines that perform building, intensive security scanning, and deployments.
 - **Application Layer**: Three custom microservices (Frontend UI, Backend API, asynchronous Worker) and a stateful PostgreSQL database, all deployed continuously into the cluster.
+
+### System Architecture Diagram
+```text
+                        ┌──────────────────────────┐
+                        │          Users           │
+                        │  Browser / Client Apps   │
+                        └─────────────┬────────────┘
+                                      │
+                                      │ HTTP
+                                      ▼
+                         ┌────────────────────────┐
+                         │  Azure Public Internet │
+                         └─────────────┬──────────┘
+                                       │
+                                       ▼
+                         ┌────────────────────────┐
+                         │  Azure Load Balancer   │
+                         │  (Public IP :80)       │
+                         └─────────────┬──────────┘
+                                       │
+                                       ▼
+                    ┌────────────────────────────────────┐
+                    │        Azure Kubernetes Service    │
+                    │              (AKS)                 │
+                    │                                    │
+                    │   ┌────────────────────────────┐   │
+                    │   │ Frontend Deployment        │   │
+                    │   │ (Nginx / UI)               │   │
+                    │   └─────────────┬──────────────┘   │
+                    │                 │                  │
+                    │                 ▼                  │
+                    │   ┌────────────────────────────┐   │
+                    │   │ Backend API Deployment     │   │
+                    │   │ (Application Service)      │   │
+                    │   └─────────────┬──────────────┘   │
+                    │                 │                  │
+                    │                 ▼                  │
+                    │   ┌────────────────────────────┐   │
+                    │   │ PostgreSQL Database        │   │
+                    │   │ (Stateful Storage)         │   │
+                    │   └─────────────┬──────────────┘   │
+                    │                 │                  │
+                    │                 ▼                  │
+                    │   ┌────────────────────────────┐   │
+                    │   │ Worker Service             │   │
+                    │   │ (Async Processing)         │   │
+                    │   └────────────────────────────┘   │
+                    │                                    │
+                    └────────────────────────────────────┘
+
+
+            ┌──────────────────────────────────────────────┐
+            │                Azure Resources               │
+            │                                              │
+            │  Azure Container Registry (ACR)              │
+            │  Azure Blob Storage (Security Reports)       │
+            │  Azure Log Analytics / Monitoring            │
+            │  Azure VNet + NSG Network Isolation          │
+            └──────────────────────────────────────────────┘
+```
 
 ## 3️⃣ Technology Stack
 | Category | Tool / Technology | Purpose |
@@ -30,7 +90,24 @@ The platform seamlessly blends Azure Cloud Infrastructure with specialized DevSe
 | **Database** | PostgreSQL | Stateful backend storage |
 
 ## 4️⃣ Infrastructure Design
-The architecture utilizes a deeply isolated VNet design governed by strict Network Security Groups (NSGs):
+The architecture utilizes a deeply isolated **Secure Tiered Virtual Network Architecture** governed by strict Network Security Groups (NSGs):
+
+### Network Architecture Diagram
+```text
+Azure VNet
+│
+├── Public Subnet
+│      └── Azure LoadBalancer
+│
+├── Private App Subnet
+│      └── AKS Node Pools
+│            ├ Frontend Pods
+│            ├ Backend Pods
+│            └ Worker Pods
+│
+└── Database Subnet
+       └── PostgreSQL Pod
+```
 
 1. **Public Subnet (`subnet-public`)**
    - Holds public-facing Azure LoadBalancers dynamically created by AKS.
@@ -42,7 +119,26 @@ The architecture utilizes a deeply isolated VNet design governed by strict Netwo
 3. **Database Subnet (`subnet-private-db`)**
    - For highly isolated workloads. Only allows connections on Port `5432` originating exclusively from the Application Subnet.
 
-## 5️⃣ Security Implementation
+## 5️⃣ Kubernetes Deployment Architecture
+The workloads running inside the private AKS cluster are structured natively into independent deployments and exposed via specific Kubernetes Services:
+
+```text
+AKS Cluster
+│
+├ Frontend Deployment (2 replicas)
+│  └─ Service Type: LoadBalancer (Exposed via Public IP)
+│
+├ Backend Deployment (2 replicas)
+│  └─ Service Type: ClusterIP (Internal only)
+│
+├ Worker Deployment (1 replica)
+│  └─ No Service (Pulls data asynchronously)
+│
+└ PostgreSQL Deployment (1 pod)
+   └─ Service Type: ClusterIP (Internal data access)
+```
+
+## 6️⃣ Security Implementation
 This POC implements a defense-in-depth security posture, categorized by layer:
 - **Network Security:** Private AKS Cluster, NSG port-blocking, and isolated VNet tiers.
 - **Identity & Access Management (IAM):** 
@@ -51,8 +147,71 @@ This POC implements a defense-in-depth security posture, categorized by layer:
   - **Managed Identities**: AKS nodes natively pull from ACR using Azure Managed Identities, eliminating the need for Docker login credentials inside the cluster.
 - **"Shift-Left" Pipeline Gates:** No code reaches the cluster without passing Gitleaks, Checkov, Dependency-Check, SonarQube, and Trivy.
 
-## 6️⃣ CI/CD Pipeline
-The deployment relies on Jenkins Declarative Pipelines, tightly separated by concern. All pipelines execute in this general structure:
+## 7️⃣ CI/CD Pipeline
+The deployment relies on Jenkins Declarative Pipelines, tightly separated by concern. 
+
+### DevSecOps Pipeline Architecture Diagram
+```text
+                     ┌─────────────────────────┐
+                     │       Developer         │
+                     │   Git Push / Commit     │
+                     └────────────┬────────────┘
+                                  │
+                                  ▼
+                     ┌─────────────────────────┐
+                     │        GitHub           │
+                     │   Source Code Repo      │
+                     └────────────┬────────────┘
+                                  │
+                                  ▼
+                     ┌─────────────────────────┐
+                     │        Jenkins          │
+                     │     CI/CD Pipeline      │
+                     └────────────┬────────────┘
+                                  │
+               ┌──────────────────┼──────────────────┐
+               │                  │                  │
+               ▼                  ▼                  ▼
+
+      ┌──────────────┐   ┌────────────────┐   ┌──────────────┐
+      │   Gitleaks   │   │ SonarQube SAST │   │ Dependency   │
+      │ Secret Scan  │   │ Code Analysis  │   │ Check (SCA)  │
+      └──────┬───────┘   └────────┬───────┘   └──────┬───────┘
+             │                    │                 │
+             └────────────┬───────┴─────────────────┘
+                          ▼
+                 ┌───────────────────┐
+                 │   Docker Build    │
+                 │  Application Image│
+                 └──────────┬────────┘
+                            ▼
+                     ┌──────────────┐
+                     │   Trivy Scan │
+                     │ Container CVE│
+                     └──────┬───────┘
+                            ▼
+               ┌─────────────────────────┐
+               │ Azure Container Registry│
+               │          (ACR)          │
+               └────────────┬────────────┘
+                            ▼
+               ┌─────────────────────────┐
+               │   AKS Deployment        │
+               │ az aks command invoke   │
+               └────────────┬────────────┘
+                            ▼
+               ┌─────────────────────────┐
+               │  Kubernetes Cluster     │
+               │ Frontend / Backend / DB │
+               └────────────┬────────────┘
+                            ▼
+               ┌─────────────────────────┐
+               │ Azure Blob Storage      │
+               │ Security Reports Archive│
+               └─────────────────────────┘
+```
+
+All application pipelines execute in this general structure:
 1. **Source Checkout**
 2. **Pre-Build Scan**: `Gitleaks` (Secrets) and `Dependency-Check` (Libraries) or `Checkov` (IaC).
 3. **Static Analysis**: `SonarQube` (SAST).
@@ -62,31 +221,35 @@ The deployment relies on Jenkins Declarative Pipelines, tightly separated by con
 7. **Deployment**: Uses `az aks command invoke` to securely proxy `kubectl` commands into the *private* AKS cluster without requiring a VPN or jumpbox for the Jenkins agent.
 8. **Compliance Archiving**: Re-names, compresses (`tar.gz`), and uploads all security reports directly to Azure Blob Storage inside `app-name/build-number/` hierarchies.
 
-## 7️⃣ Deployment Workflow
+## 8️⃣ Deployment Workflow
 For a from-scratch deployment, the sequence is critical to ensure dependencies exist:
 1. **Terraform Pipeline (`cicd/terraform/Jenkinsfile`)**: Builds the VNet, ACR, Storage Account, and AKS cluster.
 2. **Database Pipeline (`cicd/database/Jenkinsfile`)**: Pulls `postgres:15`, runs a Trivy scan, dynamically creates the `postgres-secret` inside AKS, and deploys the database manifests.
 3. **Backend & Worker Pipelines (`cicd/backend/Jenkinsfile`, `cicd/worker/Jenkinsfile`)**: Builds the microservices, connects to Postgres via the injected secret, and applies the deployments securely.
 4. **Frontend Pipeline (`cicd/frontend/Jenkinsfile`)**: Builds the UI proxy, provisions the Azure LoadBalancer, and exposes the entry point via Port 80.
 
-## 8️⃣ Monitoring & Logging (Optional)
+## 9️⃣ Monitoring & Logging (Optional)
 This architecture is provisioned with an **Azure Log Analytics Workspace** integrated natively into the AKS module. 
 - Kubernetes API server audit logs, node metrics, and pod lifecycles are piped into Azure Monitor via Container Insights.
 - Security reports generated by the CI/CD pipeline act as persistent audit trails in Blob Storage, independent of the cluster's lifecycle.
 
-## 9️⃣ Disaster Recovery Workflow
+## 🔟 Disaster Recovery Workflow
 Because the entire platform adheres strictly to Infrastructure as Code and Declarative configuration, recovering from a total regional failure or catastrophic cluster loss is trivial:
 1. Re-run the **Terraform Pipeline** (points to a new region if necessary).
 2. Once the cluster is up, re-run the **Database**, **Backend**, **Worker**, and **Frontend** Jenkins pipelines sequentially.
 3. Kubernetes declarative manifests will restore the exact state. Jenkins acts as the source of truth for secret redeployment.
 
-## 🔟 Future Improvements
+## 🏆 Key Engineering Achievements
+* Designed a **secure DevSecOps pipeline on Azure AKS** utilizing private clusters and isolated worker nodes.
+* Implemented **multi-layer security scanning (SAST, SCA, container scanning, secret detection)** directly into CI/CD gates.
+* Built **fully automated infrastructure provisioning using Terraform (IaC)**.
+* Integrated **Azure RBAC and Managed Identities** for zero-trust, secretless integrations between Azure services.
+* Implemented a **secure tiered virtual network architecture with tight NSG isolation**.
+* Automated **artifact and compliance security report archival in Azure Blob Storage** for historical auditing.
+
+## 🚀 Future Improvements
 While this is a robust POC, scaling it to enterprise production could include:
-1. **Dynamic Application Security Testing (DAST)**
-   - Introduce OWASP ZAP into the end of the Frontend pipeline to scan the live LoadBalancer for XSS and injection flaws.
-2. **Azure API Management (APIM)**
-   - Place APIM in front of the application subnet to provide rate-limiting, WAF capabilities, and OAuth token validation.
-3. **Azure Key Vault CSI Driver**
-   - Transition from Jenkins injecting Kubernetes Secrets directly to utilizing the AKS Key Vault CSI driver, allowing pods to mount hardware-backed secrets dynamically as volumes.
-4. **Advanced Observability**
-   - Deploy a Prometheus and Grafana stack inside the cluster for deep-dive application performance monitoring (APM) and custom alerts.
+1. **Dynamic Application Security Testing (DAST)**: Introduce OWASP ZAP into the end of the Frontend pipeline to scan the live LoadBalancer for XSS and injection flaws.
+2. **Azure API Management (APIM)**: Place APIM in front of the application subnet to provide rate-limiting, WAF capabilities, and OAuth token validation.
+3. **Azure Key Vault CSI Driver**: Transition from Jenkins injecting Kubernetes Secrets directly to utilizing the AKS Key Vault CSI driver, allowing pods to mount hardware-backed secrets dynamically as volumes.
+4. **Advanced Observability**: Deploy a Prometheus and Grafana stack inside the cluster for deep-dive application performance monitoring (APM) and custom alerts.
