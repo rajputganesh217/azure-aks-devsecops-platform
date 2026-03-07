@@ -94,6 +94,19 @@ resource "azurerm_network_security_group" "app_nsg" {
     destination_address_prefix = "*"
   }
 
+  # Allow AzureLoadBalancer health probes
+  security_rule {
+    name                       = "AllowAzureLoadBalancerProbe"
+    priority                   = 105
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "AzureLoadBalancer"
+    destination_port_range     = "30000-32767"
+    source_port_range          = "*"
+    destination_address_prefix = "*"
+  }
+
   # Block direct internet access
   security_rule {
     name                       = "DenyInternetInbound"
