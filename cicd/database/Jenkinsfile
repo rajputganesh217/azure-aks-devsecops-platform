@@ -48,6 +48,19 @@ pipeline {
             }
         }
 
+        stage('Trivy Image Scan') {
+            steps {
+                sh '''
+                # Pull the target database image locally to scan it
+                docker pull postgres:15
+                
+                # Run Trivy against the official postgres image to detect vulnerabilities
+                trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress --format table postgres:15
+                trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress --format json -o trivy-report.json postgres:15
+                '''
+            }
+        }
+
         stage('Deploy PostgreSQL') {
             steps {
                 sh '''
@@ -61,6 +74,28 @@ pipeline {
                 kubectl apply -f postgres-service.yaml;
                 kubectl rollout status deployment/postgres
                 "
+                '''
+            }
+        }
+
+        stage('Upload Security Reports to Azure Storage') {
+            steps {
+                sh '''
+                az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+                az account set --subscription $AZURE_SUBSCRIPTION_ID
+                
+                # Format the report and archive it exactly like the microservices
+                mv trivy-report.json trivy-report-database.json
+                tar -czvf security-reports-database-latest.tar.gz trivy-report-database.json
+                
+                # Ensure container exists and upload the report
+                az storage container create --name security-reports --account-name tfstatedevsecops01 --auth-mode login || true
+                az storage blob upload \\
+                  --account-name tfstatedevsecops01 \\
+                  --container-name security-reports \\
+                  --name database/latest/security-reports-database-latest.tar.gz \\
+                  --file security-reports-database-latest.tar.gz \\
+                  --auth-mode login
                 '''
             }
         }
