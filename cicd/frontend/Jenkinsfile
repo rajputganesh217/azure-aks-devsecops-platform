@@ -112,8 +112,8 @@ EOF
                 az account set --subscription $AZURE_SUBSCRIPTION_ID
                 az aks get-credentials --resource-group $AKS_RESOURCE_GROUP --name $AKS_CLUSTER_NAME --overwrite-existing
                 
-                kubectl apply -f kubernetes/frontend-deployment.yaml
-                kubectl apply -f kubernetes/frontend-service.yaml
+                kubectl apply -f kubernetes/frontend/deployment.yaml
+                kubectl apply -f kubernetes/frontend/service.yaml
                 
                 kubectl set image deployment/frontend frontend=${IMAGE_NAME}:${BUILD_NUMBER}
                 kubectl rollout status deployment/frontend
