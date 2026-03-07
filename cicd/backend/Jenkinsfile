@@ -1,3 +1,5 @@
+def dockerImage = ''
+
 pipeline {
     agent any
 
@@ -74,7 +76,7 @@ EOF
         stage('Docker Build') {
             steps {
                 script {
-                    def dockerImage = docker.build("${env.IMAGE_NAME}:${env.BUILD_NUMBER}", "-f docker/${env.APP_NAME}/Dockerfile .")
+                    dockerImage = docker.build("${env.IMAGE_NAME}:${env.BUILD_NUMBER}", "-f docker/${env.APP_NAME}/Dockerfile .")
                 }
             }
         }
