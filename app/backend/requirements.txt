@@ -1,6 +1,4 @@
-flask>=2.3,<3.0
-gunicorn>=21.0,<22.0
-psycopg2-binary>=2.9,<3.0
-flask
-psycopg2-binary
-flask-cors
+flask>=3.0.0
+gunicorn>=22.0.0
+psycopg2-binary>=2.9
+flask-cors>=4.0.0
