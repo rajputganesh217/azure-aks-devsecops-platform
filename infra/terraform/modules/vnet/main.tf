@@ -81,6 +81,19 @@ resource "azurerm_network_security_group" "app_nsg" {
     destination_address_prefix = "*"
   }
 
+  # Allow HTTP inbound from the Internet for Frontend LoadBalancers
+  security_rule {
+    name                       = "AllowInternetHTTP"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "*"
+  }
+
   # Block direct internet access
   security_rule {
     name                       = "DenyInternetInbound"
