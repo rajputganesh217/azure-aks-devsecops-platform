@@ -5,7 +5,48 @@ Welcome to the Azure DevSecOps Kubernetes Platform. This project is a comprehens
 
 The goal of this platform is to prove that modern applications can be delivered rapidly through fully automated Jenkins CI/CD pipelines without compromising on deep, multi-layered security. Every stage of the deployment is gated by professional security scanning tools spanning source code, dependencies, containers, and infrastructure.
 
-## 2️⃣ Architecture Overview
+## 2️⃣ Getting Started / Cloning this Repository
+If you are cloning this repository to deploy the DevSecOps platform in your own environment, follow these steps.
+
+### Prerequisites
+Before running the pipelines, ensure you have the following installed and configured:
+- **Azure Account**: Active subscription with permissions to create Resource Groups and Service Principals.
+- **Jenkins Server**: A running Jenkins instance (local or clouded) with the following plugins installed:
+  - Pipeline, GitHub, Docker Pipeline, SonarQube Scanner.
+- **DevSecOps Tools Installed on Jenkins Agent**:
+  - `terraform` (CLI), `az` (Azure CLI), `docker`, `trivy`, `checkov`, `gitleaks`, `dependency-check`.
+- **SonarQube Server**: A running SonarQube instance accessible by Jenkins.
+
+### Step 1: Clone the Repository
+```bash
+git clone https://github.com/rajputganesh217/azure-aks-devsecops-platform.git
+cd azure-aks-devsecops-platform
+```
+
+### Step 2: Configure Jenkins Credentials
+Navigate to **Manage Jenkins -> Credentials** and add the following Global Secret Texts:
+- **Azure Service Principal**: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`.
+  - *(Note: These same IDs should also be duplicated as exactly `ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, etc. for Terraform's azurerm provider)*.
+- **Database Secrets**: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`.
+- **API Keys**: `sonar-token` (SonarQube auth), `NVD_API_KEY` (Dependency-Check), `azure-acr-credentials`.
+
+### Step 3: Execution Execution Flow
+In Jenkins, create **five new Pipeline jobs**, pointing each to its respective `Jenkinsfile` in the repository. **You MUST run them in this exact order** the very first time to ensure infrastructure dependencies exist:
+
+1. **`terraform` pipeline** -> (`cicd/terraform/Jenkinsfile`)
+   - *Wait for completion. This provisions the Azure VNet, AKS Cluster, and ACR.*
+2. **`database` pipeline** -> (`cicd/database/Jenkinsfile`)
+   - *Provisions the PostgreSQL Kubernetes deployment and injects the secrets.*
+3. **`backend` pipeline** -> (`cicd/backend/Jenkinsfile`)
+4. **`worker` pipeline** -> (`cicd/worker/Jenkinsfile`)
+5. **`frontend` pipeline** -> (`cicd/frontend/Jenkinsfile`)
+   - *Spins up the Azure LoadBalancer. Wait 2-3 minutes after completion for the Public IP to attach.*
+
+Once the frontend finishes, run `kubectl get svc shoe-frontend` to get your public IP, and open it in your browser!
+
+---
+
+## 3️⃣ Architecture Overview
 The platform seamlessly blends Azure Cloud Infrastructure with specialized DevSecOps orchestration:
 - **Infrastructure Layer**: Fully provisioned via **Terraform**. Establishes a Secure Tiered Virtual Network Architecture, isolated subnets, a Private Azure Kubernetes Service (AKS) cluster, an Azure Container Registry (ACR), and secure Azure Blob Storage for security compliance reporting.
 - **Orchestration Layer**: **AKS** handles the container orchestration. It's deployed as a private cluster, meaning its API server is not exposed to the public internet.
