@@ -49,7 +49,12 @@ pipeline {
         stage('OWASP Dependency-Check') {
             steps {
                 dir("${env.APP_DIR}") {
-                    dependencyCheck additionalArguments: '--scan . --format ALL', odcInstallation: 'Default'
+                    sh '''
+                    # Download and run OWASP Dependency-Check CLI manually to avoid Jenkins plugin path issues
+                    wget -qO- https://github.com/jeremylong/DependencyCheck/releases/download/v9.0.9/dependency-check-9.0.9-release.zip > dependency-check.zip
+                    unzip -q dependency-check.zip
+                    ./dependency-check/bin/dependency-check.sh --project "${APP_NAME}" --scan . --format XML --out dependency-check-report.xml
+                    '''
                     dependencyCheckPublisher pattern: 'dependency-check-report.xml'
                 }
             }
