@@ -4,7 +4,7 @@ pipeline {
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['dev', 'test', 'qa', 'prod'], description: 'Target Environment')
         string(name: 'TF_STATE_RG', defaultValue: 'aks-microservices-rg', description: 'Resource Group of TF State Storage Account')
-        string(name: 'TF_STATE_SA', defaultValue: 'terraformstate', description: 'Storage Account for TF State')
+        string(name: 'TF_STATE_SA', defaultValue: 'tfstatedevsecops01', description: 'Storage Account for TF State')
         string(name: 'TF_STATE_CONTAINER', defaultValue: 'tfstate', description: 'Container for TF State')
     }
 

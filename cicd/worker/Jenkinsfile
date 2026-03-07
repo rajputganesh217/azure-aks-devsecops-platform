@@ -3,11 +3,19 @@ pipeline {
 
     environment {
         APP_NAME         = "worker"
-        IMAGE_NAME       = "mydevopsacrprod123.azurecr.io/${APP_NAME}"
+        IMAGE_NAME       = "mydevopsacr123.azurecr.io/${APP_NAME}"
         DOCKER_CREDS_ID  = "azure-acr-credentials"
         SONAR_PROJECT_KEY = "worker-service"
-        SONAR_SERVER_ID  = "SonarQubeServer"
+        SONAR_SERVER_ID  = "sonarqube"
         APP_DIR          = "app/worker"
+        
+        // Azure credentials and target info
+        AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
+        AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
+        AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
+        AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
+        AKS_RESOURCE_GROUP    = "aks-microservices-rg"
+        AKS_CLUSTER_NAME      = "microservices-aks"
     }
 
     stages {
@@ -17,18 +25,19 @@ pipeline {
             }
         }
 
+        stage('Gitleaks Scan') {
+            steps {
+                sh '''
+                gitleaks detect --source . --config security/configs/gitleaks.toml --report-format json --report-path gitleaks-report.json || true
+                '''
+            }
+        }
+
         stage('SonarQube Static Code Analysis') {
             steps {
                 dir("${env.APP_DIR}") {
                     withSonarQubeEnv("${env.SONAR_SERVER_ID}") {
-                        sh """
-                        sonar-scanner \
-                          -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} \
-                          -Dsonar.sources=. \
-                          -Dsonar.language=py \
-                          -Dsonar.host.url=\$SONAR_HOST_URL \
-                          -Dsonar.login=\$SONAR_AUTH_TOKEN
-                        """
+                        sh "sonar-scanner -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} -Dsonar.sources=."
                     }
                 }
             }
@@ -37,6 +46,7 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
+                    // Fail the build if the SonarQube Quality Gate fails
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -64,10 +74,10 @@ pipeline {
         stage('Trivy Image Scan') {
             steps {
                 sh """
-                trivy image \
-                  --exit-code 1 \
-                  --severity HIGH,CRITICAL \
-                  --no-progress \
+                trivy image \\
+                  --exit-code 1 \\
+                  --severity HIGH,CRITICAL \\
+                  --no-progress \\
                   ${env.IMAGE_NAME}:${env.BUILD_NUMBER}
                 """
             }
@@ -76,11 +86,26 @@ pipeline {
         stage('Docker Push to ACR') {
             steps {
                 script {
-                    docker.withRegistry("https://mydevopsacrprod123.azurecr.io", "${env.DOCKER_CREDS_ID}") {
+                    docker.withRegistry("https://mydevopsacr123.azurecr.io", "${env.DOCKER_CREDS_ID}") {
                         dockerImage.push()
                         dockerImage.push("latest")
                     }
                 }
+            }
+        }
+
+        stage('Deploy to AKS') {
+            steps {
+                sh '''
+                az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+                az account set --subscription $AZURE_SUBSCRIPTION_ID
+                az aks get-credentials --resource-group $AKS_RESOURCE_GROUP --name $AKS_CLUSTER_NAME --overwrite-existing
+                
+                kubectl apply -f kubernetes/worker-deployment.yaml
+                
+                kubectl set image deployment/worker worker=${IMAGE_NAME}:${BUILD_NUMBER}
+                kubectl rollout status deployment/worker
+                '''
             }
         }
     }
@@ -88,6 +113,12 @@ pipeline {
     post {
         always {
             cleanWs()
+        }
+        success {
+            echo "Worker deployment executed successfully!"
+        }
+        failure {
+            echo "Pipeline failed. Please check the logs."
         }
     }
 }
