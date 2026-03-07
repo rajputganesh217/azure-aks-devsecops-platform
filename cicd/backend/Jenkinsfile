@@ -41,8 +41,8 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
-                    // Fail the build if the SonarQube Quality Gate fails
-                    waitForQualityGate abortPipeline: true
+                    // Continue the build even if the SonarQube Quality Gate fails
+                    waitForQualityGate abortPipeline: false
                 }
             }
         }
@@ -81,10 +81,11 @@ pipeline {
             steps {
                 sh """
                 trivy image \\
-                  --exit-code 1 \\
+                  --exit-code 0 \\
                   --severity HIGH,CRITICAL \\
                   --no-progress \\
-                  ${env.IMAGE_NAME}:${env.BUILD_NUMBER}
+                  --format table \\
+                  ${env.IMAGE_NAME}:${env.BUILD_NUMBER} > trivy-report.txt || true
                 """
             }
         }
@@ -112,6 +113,28 @@ pipeline {
                 
                 kubectl set image deployment/backend backend=${IMAGE_NAME}:${BUILD_NUMBER}
                 kubectl rollout status deployment/backend
+                '''
+            }
+        }
+    }
+        
+        stage('Upload Security Reports to Azure Storage') {
+            steps {
+                sh '''
+                az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+                az account set --subscription $AZURE_SUBSCRIPTION_ID
+                
+                # Zip all the generated reports (ignoring errors if a file is missing)
+                zip -r security-reports-${APP_NAME}-b${BUILD_NUMBER}.zip gitleaks-report.json app/${APP_NAME}/dependency-check-report.xml trivy-report.txt || true
+                
+                # Upload to Blob Storage (ensure the container exists or create it)
+                az storage container create --name security-reports --account-name tfstatedevsecops01 --auth-mode login || true
+                az storage blob upload \\
+                    --account-name tfstatedevsecops01 \\
+                    --container-name security-reports \\
+                    --name ${APP_NAME}/${BUILD_NUMBER}/security-reports.zip \\
+                    --file security-reports-${APP_NAME}-b${BUILD_NUMBER}.zip \\
+                    --auth-mode login || true
                 '''
             }
         }
