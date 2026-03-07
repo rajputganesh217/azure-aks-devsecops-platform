@@ -63,10 +63,8 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                dir("${env.APP_DIR}") {
-                    script {
-                        dockerImage = docker.build("${env.IMAGE_NAME}:${env.BUILD_NUMBER}")
-                    }
+                script {
+                    dockerImage = docker.build("${env.IMAGE_NAME}:${env.BUILD_NUMBER}", "-f docker/${env.APP_NAME}/Dockerfile .")
                 }
             }
         }
