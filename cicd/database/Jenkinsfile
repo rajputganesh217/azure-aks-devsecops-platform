@@ -1,0 +1,56 @@
+pipeline {
+    agent any
+
+    environment {
+        // Azure credentials and target info
+        AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
+        AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
+        AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
+        AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
+        AKS_RESOURCE_GROUP    = "aks-microservices-rg"
+        AKS_CLUSTER_NAME      = "microservices-aks"
+        
+        // Database credentials for secret generation
+        // Ideally these should also be fetched from Jenkins credentials or Azure Key Vault in prod
+        DB_USER               = "postgres"
+        DB_PASSWORD           = "password123"
+        DB_NAME               = "shoedb"
+    }
+
+    stages {
+        stage('Deploy Database and Secrets to AKS') {
+            steps {
+                sh '''
+                az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+                az account set --subscription $AZURE_SUBSCRIPTION_ID
+                
+                # Create the Secret in AKS (deleting first if it exists to cleanly recreate)
+                az aks command invoke \\
+                  --resource-group $AKS_RESOURCE_GROUP \\
+                  --name $AKS_CLUSTER_NAME \\
+                  --command "kubectl delete secret postgres-secret --ignore-not-found && kubectl create secret generic postgres-secret --from-literal=POSTGRES_DB=${DB_NAME} --from-literal=POSTGRES_USER=${DB_USER} --from-literal=POSTGRES_PASSWORD=${DB_PASSWORD}"
+                
+                # Apply Database Deployment and Service
+                az aks command invoke \\
+                  --resource-group $AKS_RESOURCE_GROUP \\
+                  --name $AKS_CLUSTER_NAME \\
+                  --command "kubectl apply -f postgres-deployment.yaml && kubectl apply -f postgres-service.yaml && kubectl rollout status deployment/postgres" \\
+                  --file kubernetes/postgres/postgres-deployment.yaml \\
+                  --file kubernetes/postgres/postgres-service.yaml
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "PostgreSQL deployment and secrets successfully provisioned!"
+        }
+        failure {
+            echo "Pipeline failed. Please check the logs."
+        }
+    }
+}
