@@ -204,65 +204,90 @@ This POC implements a defense-in-depth security posture, categorized by layer:
 ## 7️⃣ CI/CD Pipeline
 The deployment relies on Jenkins Declarative Pipelines, tightly separated by concern. 
 
-### DevSecOps Pipeline Architecture Diagram
-```text
-                     ┌─────────────────────────┐
-                     │       Developer         │
-                     │   Git Push / Commit     │
-                     └────────────┬────────────┘
-                                  │
-                                  ▼
-                     ┌─────────────────────────┐
-                     │        GitHub           │
-                     │   Source Code Repo      │
-                     └────────────┬────────────┘
-                                  │
-                                  ▼
-                     ┌─────────────────────────┐
-                     │        Jenkins          │
-                     │     CI/CD Pipeline      │
-                     └────────────┬────────────┘
-                                  │
-               ┌──────────────────┼──────────────────┐
-               │                  │                  │
-               ▼                  ▼                  ▼
+### System Architecture Diagram
+```mermaid
+flowchart TD
+    %% Users
+    Users("🧑‍💻 Internet Users")
+    Devs("💻 Developers")
 
-      ┌──────────────┐   ┌────────────────┐   ┌──────────────┐
-      │   Gitleaks   │   │ SonarQube SAST │   │ Dependency   │
-      │ Secret Scan  │   │ Code Analysis  │   │ Check (SCA)  │
-      └──────┬───────┘   └────────┬───────┘   └──────┬───────┘
-             │                    │                 │
-             └────────────┬───────┴─────────────────┘
-                          ▼
-                 ┌───────────────────┐
-                 │   Docker Build    │
-                 │  Application Image│
-                 └──────────┬────────┘
-                            ▼
-                     ┌──────────────┐
-                     │   Trivy Scan │
-                     │ Container CVE│
-                     └──────┬───────┘
-                            ▼
-               ┌─────────────────────────┐
-               │ Azure Container Registry│
-               │          (ACR)          │
-               └────────────┬────────────┘
-                            ▼
-               ┌─────────────────────────┐
-               │   AKS Deployment        │
-               │ az aks command invoke   │
-               └────────────┬────────────┘
-                            ▼
-               ┌─────────────────────────┐
-               │  Kubernetes Cluster     │
-               │ Frontend / Backend / DB │
-               └────────────┬────────────┘
-                            ▼
-               ┌─────────────────────────┐
-               │ Azure Blob Storage      │
-               │ Security Reports Archive│
-               └─────────────────────────┘
+    %% CI/CD & Security Pipeline
+    subgraph Pipeline ["DevSecOps CI/CD Pipeline"]
+        direction TB
+        GitHub("🐙 GitHub Repository")
+        Jenkins{"⚙️ Jenkins Orchestrator"}
+        
+        subgraph Scans ["Shift-Left Security Gates"]
+            direction LR
+            Gitleaks("🔒 Gitleaks (Secrets)")
+            Sonar("📡 SonarQube (SAST)")
+            DepCheck("📦 Dependency-Check (SCA)")
+            Checkov("✅ Checkov (IaC)")
+        end
+        
+        DockerBuild("🐳 Docker Build")
+        Trivy("🛡️ Trivy (Container CVEs)")
+    end
+
+    %% Azure PaaS Services (Outside VNet)
+    subgraph PaaS ["Azure Platform Services (PaaS)"]
+        direction LR
+        ACR("📦 Azure Container Registry (ACR)")
+        Blob("🗄️ Azure Blob Storage (Audit Reports)")
+    end
+
+    %% Azure Network & Compute
+    subgraph Azure ["☁️ Azure Cloud Infrastructure"]
+        direction TB
+        ALB["⚖️ Azure Load Balancer (Public IP)"]
+        
+        subgraph VNet ["Secure Tiered Virtual Network (VNet)"]
+            direction TB
+            subgraph AppSubnet ["Private App Subnet (NSG Protected)"]
+                subgraph AKS ["Azure Kubernetes Service (AKS)"]
+                    direction TB
+                    Front("🖥️ Frontend Pods")
+                    Back("⚙️ Backend API Pods")
+                    Worker("🔄 Worker Pods")
+                    DB[("🐘 PostgreSQL Pod")]
+                end
+            end
+            
+            subgraph DBSubnet ["Database Subnet (Isolated)"]
+                FutureDB("🔮 Future: Managed Azure PostgreSQL")
+            end
+        end
+    end
+
+    %% Pipeline Flow
+    Devs -->|1. Git Push| GitHub
+    GitHub -->|2. Webhook| Jenkins
+    Jenkins ==>|3. Static Scans| Scans
+    Jenkins ==>|4. Build Image| DockerBuild
+    DockerBuild ==>|5. Image Scan| Trivy
+    Jenkins ==>|6. Archive Reports| Blob
+    Trivy ==>|7. Push Secure Image| ACR
+
+    %% Infrastructure & Request Flow
+    Jenkins -.->|8. Deploy (az aks command invoke)| AKS
+    ACR -.->|AKS Pulls Image directly| AKS
+    
+    Users ===>|Port 80 HTTP| ALB
+    ALB ===>|Inbound Routing| Front
+    Front <-->|ClusterIP| Back
+    Back <-->|ClusterIP| DB
+    Back -.->|Async Message| Worker
+
+    %% Styling
+    classDef jenkins fill:#0054a6,color:white,stroke:#003366,stroke-width:2px
+    classDef security fill:#0078d4,color:white,stroke:#005a9e,stroke-width:2px
+    classDef azure fill:#00a4ef,color:white,stroke:#0078d4,stroke-width:2px
+    classDef light fill:#f3f9ff,color:#333,stroke:#cce5ff,stroke-width:2px
+
+    class Jenkins jenkins
+    class Gitleaks,Sonar,DepCheck,Checkov,Trivy security
+    class ALB,ACR,Blob azure
+    class VNet,AppSubnet,DBSubnet,AKS,Pipeline,PaaS light
 ```
 
 All application pipelines execute in this general structure:
