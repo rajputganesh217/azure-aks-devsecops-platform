@@ -88,10 +88,17 @@ pipeline {
                 mv trivy-report.json trivy-report-database.json
                 tar -czvf security-reports-database-latest.tar.gz trivy-report-database.json
                 
+                # Get the dynamically created storage account name
+                export STORAGE_ACCOUNT_NAME=$(az storage account list --resource-group $AKS_RESOURCE_GROUP --query "[?contains(name, 'devsecopsrep')].name" -o tsv)
+                if [ -z "$STORAGE_ACCOUNT_NAME" ]; then
+                    echo "Error: Could not find the security reports storage account."
+                    exit 1
+                fi
+                
                 # Ensure container exists and upload the report
-                az storage container create --name security-reports --account-name tfstatedevsecops01 --auth-mode login || true
+                az storage container create --name security-reports --account-name $STORAGE_ACCOUNT_NAME --auth-mode login || true
                 az storage blob upload \\
-                  --account-name tfstatedevsecops01 \\
+                  --account-name $STORAGE_ACCOUNT_NAME \\
                   --container-name security-reports \\
                   --name database/latest/security-reports-database-latest.tar.gz \\
                   --file security-reports-database-latest.tar.gz \\

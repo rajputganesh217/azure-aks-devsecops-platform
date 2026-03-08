@@ -136,14 +136,21 @@ EOF
                 # Archive all the generated reports as tar.gz (ignoring errors if a file is missing)
                 tar -czvf security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz gitleaks-*.json dependency-check-*.xml trivy-report-*.txt || true
                 
+                # Get the dynamically created storage account name
+                export STORAGE_ACCOUNT_NAME=$(az storage account list --resource-group $AKS_RESOURCE_GROUP --query "[?contains(name, 'devsecopsrep')].name" -o tsv)
+                if [ -z "$STORAGE_ACCOUNT_NAME" ]; then
+                    echo "Error: Could not find the security reports storage account."
+                    exit 1
+                fi
+                
                 # Upload to Blob Storage (ensure the container exists or create it)
-                az storage container create --name security-reports --account-name tfstatedevsecops01 --auth-mode login || true
+                az storage container create --name security-reports --account-name $STORAGE_ACCOUNT_NAME --auth-mode login || true
                 az storage blob upload \\
-                    --account-name tfstatedevsecops01 \\
+                    --account-name $STORAGE_ACCOUNT_NAME \\
                     --container-name security-reports \\
                     --name ${APP_NAME}/${BUILD_NUMBER}/security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz \\
                     --file security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz \\
-                    --auth-mode login || true
+                    --auth-mode login
                 '''
             }
         }
