@@ -4,6 +4,27 @@ Hey everyone. This is a DevSecOps project I built to show how to deploy a standa
 
 The main idea here is to not just push code, but to make sure it's actually secure before it ever hits the cluster. We do secret scanning, static code analysis, library checks, and container scanning in the pipeline before the image even gets to Azure.
 
+## Architecture Overview
+
+This platform demonstrates a secure DevSecOps pipeline deploying a microservices application to Azure Kubernetes Service.
+
+The architecture consists of:
+- Jenkins-driven CI/CD pipelines
+- Multi-stage security scanning
+- Containerized microservices deployed to AKS
+- Azure Container Registry for image storage
+- Azure Blob Storage for security audit reports
+- Network isolation using a tiered Azure Virtual Network
+
+## Project Highlights
+
+- Fully automated DevSecOps pipeline on Azure AKS
+- Integrated security scanning across code, dependencies, containers, and infrastructure
+- Terraform-based Infrastructure as Code for reproducible environments
+- Secure container delivery using Azure Container Registry
+- Network isolation using Azure VNet and NSGs
+- Security report archiving to Azure Blob Storage for auditability
+
 ---
 
 ## Getting Started
@@ -112,7 +133,7 @@ flowchart TD
     PaaS -.->|Images & Reports| AKS
 ```
 
-* **Public Subnet:** Just the Azure Load Balancers created by Kubernetes.
+* **Public Exposure:** Azure LoadBalancer created by AKS provides the public entry point.
 * **App Subnet:** Where the actual AKS worker nodes live. No direct internet access allowed. Standard NSG isolation blocks it off. We explicitly allow the Azure Loadbalancer health probes to talk to the NodePorts.
 * **DB Subnet:** Empty for now, but reserved for a future managed Azure DB instance.
 
