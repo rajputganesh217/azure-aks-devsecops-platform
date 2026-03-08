@@ -54,63 +54,76 @@ The platform seamlessly blends Azure Cloud Infrastructure with specialized DevSe
 - **Application Layer**: Three custom microservices (Frontend UI, Backend API, asynchronous Worker) and a stateful PostgreSQL database, all deployed continuously into the cluster.
 
 ### System Architecture Diagram
-```text
-                        ┌──────────────────────────┐
-                        │          Users           │
-                        │  Browser / Client Apps   │
-                        └─────────────┬────────────┘
-                                      │
-                                      │ HTTP
-                                      ▼
-                         ┌────────────────────────┐
-                         │  Azure Public Internet │
-                         └─────────────┬──────────┘
-                                       │
-                                       ▼
-                         ┌────────────────────────┐
-                         │  Azure Load Balancer   │
-                         │  (Public IP :80)       │
-                         └─────────────┬──────────┘
-                                       │
-                                       ▼
-                    ┌────────────────────────────────────┐
-                    │        Azure Kubernetes Service    │
-                    │              (AKS)                 │
-                    │                                    │
-                    │   ┌────────────────────────────┐   │
-                    │   │ Frontend Deployment        │   │
-                    │   │ (Nginx / UI)               │   │
-                    │   └─────────────┬──────────────┘   │
-                    │                 │                  │
-                    │                 ▼                  │
-                    │   ┌────────────────────────────┐   │
-                    │   │ Backend API Deployment     │   │
-                    │   │ (Application Service)      │   │
-                    │   └─────────────┬──────────────┘   │
-                    │                 │                  │
-                    │                 ▼                  │
-                    │   ┌────────────────────────────┐   │
-                    │   │ PostgreSQL Database        │   │
-                    │   │ (Stateful Storage)         │   │
-                    │   └─────────────┬──────────────┘   │
-                    │                 │                  │
-                    │                 ▼                  │
-                    │   ┌────────────────────────────┐   │
-                    │   │ Worker Service             │   │
-                    │   │ (Async Processing)         │   │
-                    │   └────────────────────────────┘   │
-                    │                                    │
-                    └────────────────────────────────────┘
+```mermaid
+flowchart TD
+    %% Top Level Entities
+    Devs("🧑‍💻 Developers") <--> Browser("🌐 Browser / Clients")
+    Browser <--> Jenkins{"⚙️ Jenkins CI/CD Pipeline"}
+    Jenkins <--> GitHub("🐙 GitHub Source Repo")
 
+    %% Security Scanners
+    subgraph Security ["Shift-Left Security"]
+        direction LR
+        Gitleaks("🔒 Gitleaks<br>Secret Scanning")
+        Sonar("📡 SonarQube<br>Code Analysis")
+        TrivyCheckov("🛡️ Trivy & Checkov<br>Security Scans")
+    end
 
-            ┌──────────────────────────────────────────────┐
-            │                Azure Resources               │
-            │                                              │
-            │  Azure Container Registry (ACR)              │
-            │  Azure Blob Storage (Security Reports)       │
-            │  Azure Log Analytics / Monitoring            │
-            │  Azure VNet + NSG Network Isolation          │
-            └──────────────────────────────────────────────┘
+    Jenkins ==>|Triggers & Scans| Security
+    Security ==>|Deploys to| ALB
+
+    %% Azure Environment
+    subgraph AzureEnv ["☁️ Azure Virtual Network (Secure Tiered VNet)"]
+        direction TB
+        ALB["⚖️ Azure Load Balancer (Public IP)"]
+
+        subgraph VNet [" "]
+            direction LR
+
+            subgraph Public ["Public Subnet Elements"]
+                direction TB
+                ACR("📦 Azure Container Registry")
+                Blob("🗄️ Blob Storage (Reports)")
+            end
+
+            subgraph AKS ["AKS Private Cluster"]
+                subgraph App ["Private App Subnet"]
+                    direction LR
+                    Front("💻 Frontend") <--> Back("⚙️ Backend API")
+                    Back <--> Worker("🔄 Worker Service")
+                end
+            end
+
+            subgraph DB ["Database Subnet"]
+                Postgres[("🐘 PostgreSQL Database")]
+            end
+
+            Public -.->|Pulls Images & Pushes Reports| AKS
+            AKS <-->|Port 5432| DB
+        end
+
+        ALB ==>|Port 80| AKS
+    end
+
+    %% Legend Bottom Layer
+    subgraph Legend ["Infrastructure as Code | Security & Scanning Tools | Azure Services"]
+        direction LR
+        Terraform("🏗️ Terraform")
+        AzureCLI("💻 Azure CLI")
+    end
+
+    %% Stylish Colors mapping to the image
+    classDef jenkins fill:#0054a6,color:white,stroke:#003366,stroke-width:2px
+    classDef security fill:#0078d4,color:white,stroke:#005a9e,stroke-width:2px
+    classDef azure fill:#00a4ef,color:white,stroke:#0078d4,stroke-width:2px
+    classDef db fill:#336791,color:white,stroke:#234a66,stroke-width:2px
+    classDef light fill:#f3f9ff,color:#333,stroke:#cce5ff,stroke-width:2px
+
+    class Jenkins jenkins
+    class Gitleaks,Sonar,TrivyCheckov security
+    class ALB azure
+    class Postgres db
+    class Public,App,DB,AKS,VNet light
 ```
 
 ## 3️⃣ Technology Stack
