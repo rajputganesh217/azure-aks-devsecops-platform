@@ -22,52 +22,51 @@ pipeline {
     }
 
     stages {
-        stage('Gitleaks Scan') {
-            steps {
-                sh '''
-                gitleaks detect --source . --config security/configs/gitleaks.toml --report-format json --report-path gitleaks-report.json || true
-                '''
-            }
-        }
-
-        stage('SonarQube Static Code Analysis') {
-            steps {
-                dir("${env.APP_DIR}") {
-                    withSonarQubeEnv("${env.SONAR_SERVER_ID}") {
-                        sh "/opt/sonar-scanner/bin/sonar-scanner -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} -Dsonar.sources=."
+        stage('Parallel Security Scans') {
+            parallel {
+                stage('Gitleaks Scan') {
+                    steps {
+                        sh '''
+                        gitleaks detect --source . --config security/configs/gitleaks.toml --report-format json --report-path gitleaks-report.json || true
+                        '''
                     }
                 }
-            }
-        }
 
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    // Continue the build even if the SonarQube Quality Gate fails
-                    waitForQualityGate abortPipeline: false
+                stage('SonarQube Static Code Analysis & Quality Gate') {
+                    steps {
+                        dir("${env.APP_DIR}") {
+                            withSonarQubeEnv("${env.SONAR_SERVER_ID}") {
+                                sh "/opt/sonar-scanner/bin/sonar-scanner -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} -Dsonar.sources=."
+                            }
+                        }
+                        timeout(time: 5, unit: 'MINUTES') {
+                            // Continue the build even if the SonarQube Quality Gate fails
+                            waitForQualityGate abortPipeline: false
+                        }
+                    }
                 }
-            }
-        }
 
-        stage('OWASP Dependency Check') {
-            steps {
-                dir("${env.APP_DIR}") {
-                    withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
-                        sh '''
-                        mkdir -p /var/lib/jenkins/dependency-check-data || true
-                        /opt/dependency-check/bin/dependency-check.sh \\
-                          --project "${APP_NAME}" \\
-                          --scan . \\
-                          --format XML \\
-                          --data /var/lib/jenkins/dependency-check-data \\
-                          --out dependency-check-report.xml \\
-                          --nvdApiKey $NVD_API_KEY \\
-                          --nvdApiDelay 5000 || { echo "Dependency-Check encountered an error, continuing pipeline."; cat << 'EOF' > dependency-check-report.xml
+                stage('OWASP Dependency Check') {
+                    steps {
+                        dir("${env.APP_DIR}") {
+                            withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
+                                sh '''
+                                mkdir -p /var/lib/jenkins/dependency-check-data || true
+                                /opt/dependency-check/bin/dependency-check.sh \\
+                                  --project "${APP_NAME}" \\
+                                  --scan . \\
+                                  --format XML \\
+                                  --data /var/lib/jenkins/dependency-check-data \\
+                                  --out dependency-check-report.xml \\
+                                  --nvdApiKey $NVD_API_KEY \\
+                                  --nvdApiDelay 5000 || { echo "Dependency-Check encountered an error, continuing pipeline."; cat << 'EOF' > dependency-check-report.xml
 <?xml version="1.0"?><analysis xmlns="https://jeremylong.github.io/DependencyCheck/dependency-check.3.1.xsd"><scanInfo></scanInfo><projectInfo><name>Failed Scan Default</name><reportDate>2023-01-01T00:00:00.000Z</reportDate><credits>This report contains no findings due to an NVD API update error.</credits></projectInfo><dependencies></dependencies></analysis>
 EOF
 }
-                        '''
-                        dependencyCheckPublisher pattern: 'dependency-check-report.xml'
+                                '''
+                                dependencyCheckPublisher pattern: 'dependency-check-report.xml'
+                            }
+                        }
                     }
                 }
             }
@@ -84,7 +83,9 @@ EOF
         stage('Trivy Image Scan') {
             steps {
                 sh """
+                mkdir -p ~/.cache/trivy
                 trivy image \\
+                  --cache-dir ~/.cache/trivy \\
                   --exit-code 0 \\
                   --severity HIGH,CRITICAL \\
                   --no-progress \\

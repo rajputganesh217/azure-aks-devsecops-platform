@@ -55,8 +55,9 @@ pipeline {
                 docker pull postgres:15
                 
                 # Run Trivy against the official postgres image to detect vulnerabilities
-                trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress --format table postgres:15
-                trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress --format json -o trivy-report.json postgres:15
+                mkdir -p ~/.cache/trivy
+                trivy image --cache-dir ~/.cache/trivy --exit-code 0 --severity HIGH,CRITICAL --no-progress --format table postgres:15
+                trivy image --cache-dir ~/.cache/trivy --exit-code 0 --severity HIGH,CRITICAL --no-progress --format json -o trivy-report.json postgres:15
                 '''
             }
         }
