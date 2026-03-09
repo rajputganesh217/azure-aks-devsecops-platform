@@ -55,12 +55,31 @@ module "acr" {
   location            = var.location
   resource_group_name = module.rg.rg_name
 }
+############################################
+# Application Gateway
+############################################
+
+module "app_gateway" {
+
+  source = "../../modules/app-gateway"
+
+  name                = "appgw-${random_string.suffix.result}"
+  location            = var.location
+  resource_group_name = module.rg.rg_name
+
+  subnet_id = module.vnet.public_subnet_ids["subnet-public-az1"]
+
+  capacity = 2
+}
+
+
 
 ############################################
 # AKS Cluster
 ############################################
 
 module "aks" {
+
   source = "../../modules/aks"
 
   aks_name                   = var.aks_name
@@ -69,8 +88,12 @@ module "aks" {
   dns_prefix                 = var.dns_prefix
   node_count                 = var.node_count
   vm_size                    = var.vm_size
+
   log_analytics_workspace_id = module.log_analytics.workspace_id
-  vnet_subnet_id             = module.vnet.app_subnet_ids["subnet-private-app-az1"]
+
+  vnet_subnet_id = module.vnet.app_subnet_ids["subnet-private-app-az1"]
+
+  ingress_application_gateway_id = module.app_gateway.appgw_id
 }
 
 ############################################
