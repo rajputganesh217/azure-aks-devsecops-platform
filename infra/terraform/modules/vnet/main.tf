@@ -44,6 +44,19 @@ resource "azurerm_network_security_group" "public_nsg" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+
+  # REQUIRED FOR APPLICATION GATEWAY V2
+  security_rule {
+    name                       = "AllowAppGatewayInfrastructure"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_ranges    = ["65200-65535"]
+    source_address_prefix      = "GatewayManager"
+    destination_address_prefix = "*"
+  }
 }
 
 resource "azurerm_subnet_network_security_group_association" "public_assoc" {
@@ -53,7 +66,7 @@ resource "azurerm_subnet_network_security_group_association" "public_assoc" {
 }
 
 # -------------------------
-# Application Subnets & NSG  (AKS Node Pools)
+# Application Subnets & NSG (AKS Node Pools)
 # -------------------------
 resource "azurerm_subnet" "app" {
   for_each             = var.app_subnets
@@ -68,7 +81,6 @@ resource "azurerm_network_security_group" "app_nsg" {
   location            = var.location
   resource_group_name = var.resource_group_name
 
-  # Allow inbound only from the Public Tier
   security_rule {
     name                       = "AllowPublicTierInbound"
     priority                   = 100
@@ -81,7 +93,6 @@ resource "azurerm_network_security_group" "app_nsg" {
     destination_address_prefix = "*"
   }
 
-  # Allow HTTP inbound from the Internet for Frontend LoadBalancers
   security_rule {
     name                       = "AllowInternetHTTP"
     priority                   = 110
@@ -94,7 +105,6 @@ resource "azurerm_network_security_group" "app_nsg" {
     destination_address_prefix = "*"
   }
 
-  # Allow AzureLoadBalancer health probes
   security_rule {
     name                       = "AllowAzureLoadBalancerProbe"
     priority                   = 105
@@ -107,7 +117,6 @@ resource "azurerm_network_security_group" "app_nsg" {
     destination_address_prefix = "*"
   }
 
-  # Block direct internet access
   security_rule {
     name                       = "DenyInternetInbound"
     priority                   = 4096
@@ -128,7 +137,7 @@ resource "azurerm_subnet_network_security_group_association" "app_assoc" {
 }
 
 # -------------------------
-# Database Subnets & NSG (Isolated)
+# Database Subnets & NSG
 # -------------------------
 resource "azurerm_subnet" "db" {
   for_each             = var.db_subnets
@@ -139,10 +148,12 @@ resource "azurerm_subnet" "db" {
 
   delegation {
     name = "fs"
+
     service_delegation {
       name = "Microsoft.DBforPostgreSQL/flexibleServers"
+
       actions = [
-        "Microsoft.Network/virtualNetworks/subnets/join/action",
+        "Microsoft.Network/virtualNetworks/subnets/join/action"
       ]
     }
   }
@@ -153,7 +164,6 @@ resource "azurerm_network_security_group" "db_nsg" {
   location            = var.location
   resource_group_name = var.resource_group_name
 
-  # Allow inbound ONLY from the App Tier
   security_rule {
     name                       = "AllowAppTierInbound"
     priority                   = 100
@@ -161,12 +171,11 @@ resource "azurerm_network_security_group" "db_nsg" {
     access                     = "Allow"
     protocol                   = "*"
     source_port_range          = "*"
-    destination_port_range     = "5432" # Postgres
+    destination_port_range     = "5432"
     source_address_prefixes    = values(var.app_subnets)
     destination_address_prefix = "*"
   }
 
-  # Block ALL other inbound (implicit but good to be explicit for DevSecOps)
   security_rule {
     name                       = "DenyAllInbound"
     priority                   = 4096
