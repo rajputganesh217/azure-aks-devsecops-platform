@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: shoe-frontend
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: shoe-frontend
   ports:

@@ -1,72 +1,66 @@
-def dockerImage = ''
+def dockerImage
 
 pipeline {
     agent any
 
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat','prod'], description: 'Target Environment')
+    }
+
     environment {
-        APP_NAME         = "frontend"
-        IMAGE_NAME       = "mydevopsacr123.azurecr.io/${APP_NAME}"
+
+        APP_NAME = "frontend"
+        APP_DIR  = "app/frontend"
+
+        ENV_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : '-' + params.ENVIRONMENT}"
+        ACR_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : params.ENVIRONMENT}"
+
+        IMAGE_NAME   = "mydevopsacr${ACR_SUFFIX}123.azurecr.io/${APP_NAME}"
+        REGISTRY_URL = "https://mydevopsacr${ACR_SUFFIX}123.azurecr.io"
+
         DOCKER_CREDS_ID  = "azure-acr-credentials"
+
         SONAR_PROJECT_KEY = "frontend-service"
-        SONAR_SERVER_ID  = "sonarqube"
-        APP_DIR          = "app/frontend"
-        
-        // Azure credentials and target info
+        SONAR_SERVER_ID   = "sonarqube"
+
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
-        AKS_RESOURCE_GROUP    = "aks-microservices-rg"
-        AKS_CLUSTER_NAME      = "microservices-aks"
-        NVD_API_KEY           = credentials('NVD_API_KEY')
+
+        AKS_RESOURCE_GROUP = "aks-microservices${ENV_SUFFIX}-rg"
+        AKS_CLUSTER_NAME   = "microservices-aks${ENV_SUFFIX}"
+
+        NVD_API_KEY = credentials('NVD_API_KEY')
     }
 
     stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Parallel Security Scans') {
+
             parallel {
+
                 stage('Gitleaks Scan') {
                     steps {
-                        sh '''
-                        gitleaks detect --source . --config security/configs/gitleaks.toml --report-format json --report-path gitleaks-report.json || true
-                        '''
+                        script { runGitleaksScan() }
                     }
                 }
 
-                stage('SonarQube Static Code Analysis & Quality Gate') {
+                stage('SonarQube Analysis') {
                     steps {
-                        dir("${env.APP_DIR}") {
-                            withSonarQubeEnv("${env.SONAR_SERVER_ID}") {
-                                sh "/opt/sonar-scanner/bin/sonar-scanner -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} -Dsonar.sources=. -Dsonar.ws.timeout=600"
-                            }
-                        }
-                        timeout(time: 10, unit: 'MINUTES') {
-                            // Continue the build even if the SonarQube Quality Gate fails
-                            waitForQualityGate abortPipeline: false
-                        }
+                        script { runSonarQubeAnalysis() }
                     }
                 }
 
                 stage('OWASP Dependency Check') {
                     steps {
-                        dir("${env.APP_DIR}") {
-                            withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
-                                sh '''
-                                mkdir -p /var/lib/jenkins/dependency-check-data || true
-                                /opt/dependency-check/bin/dependency-check.sh \\
-                                  --project "${APP_NAME}" \\
-                                  --scan . \\
-                                  --format XML \\
-                                  --data /var/lib/jenkins/dependency-check-data \\
-                                  --out dependency-check-report.xml \\
-                                  --nvdApiKey $NVD_API_KEY \\
-                                  --nvdApiDelay 5000 || { echo "Dependency-Check encountered an error, continuing pipeline."; cat << 'EOF' > dependency-check-report.xml
-<?xml version="1.0"?><analysis xmlns="https://jeremylong.github.io/DependencyCheck/dependency-check.3.1.xsd"><scanInfo></scanInfo><projectInfo><name>Failed Scan Default</name><reportDate>2023-01-01T00:00:00.000Z</reportDate><credits>This report contains no findings due to an NVD API update error.</credits></projectInfo><dependencies></dependencies></analysis>
-EOF
-}
-                                '''
-                                dependencyCheckPublisher pattern: 'dependency-check-report.xml'
-                            }
-                        }
+                        script { runDependencyCheck() }
                     }
                 }
             }
@@ -74,98 +68,193 @@ EOF
 
         stage('Docker Build') {
             steps {
-                script {
-                    dockerImage = docker.build("${env.IMAGE_NAME}:${env.BUILD_NUMBER}", "-f docker/${env.APP_NAME}/Dockerfile .")
-                }
+                script { buildDockerImage() }
             }
         }
 
         stage('Trivy Image Scan') {
             steps {
-                sh """
-                mkdir -p ~/.cache/trivy
-                trivy image \\
-                  --cache-dir ~/.cache/trivy \\
-                  --exit-code 0 \\
-                  --severity HIGH,CRITICAL \\
-                  --no-progress \\
-                  --format table \\
-                  ${env.IMAGE_NAME}:${env.BUILD_NUMBER} > trivy-report.txt || true
-                """
+                script { runTrivyScan() }
             }
         }
 
         stage('Docker Push to ACR') {
             steps {
-                script {
-                    docker.withRegistry("https://mydevopsacr123.azurecr.io", "${env.DOCKER_CREDS_ID}") {
-                        dockerImage.push()
-                        dockerImage.push("latest")
-                    }
-                }
+                script { pushDockerImage() }
             }
         }
 
         stage('Deploy to AKS') {
             steps {
-                sh '''
-                az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
-                az account set --subscription $AZURE_SUBSCRIPTION_ID
-                az aks get-credentials --resource-group $AKS_RESOURCE_GROUP --name $AKS_CLUSTER_NAME --overwrite-existing
-                
-                az aks command invoke \\
-                  --resource-group $AKS_RESOURCE_GROUP \\
-                  --name $AKS_CLUSTER_NAME \\
-                  --command "kubectl apply -f deployment.yaml && kubectl apply -f service.yaml && kubectl set image deployment/shoe-frontend frontend=${IMAGE_NAME}:${BUILD_NUMBER} && kubectl rollout status deployment/shoe-frontend" \\
-                  --file kubernetes/frontend/deployment.yaml \\
-                  --file kubernetes/frontend/service.yaml
-                '''
+                script { deployToAks() }
             }
         }
-        
-        stage('Upload Security Reports to Azure Storage') {
+
+        stage('Upload Security Reports') {
             steps {
-                sh '''
-                az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
-                az account set --subscription $AZURE_SUBSCRIPTION_ID
-                
-                # Rename files to include App Name and Build Number
-                mv gitleaks-report.json gitleaks-${APP_NAME}-b${BUILD_NUMBER}.json || true
-                mv app/${APP_NAME}/dependency-check-report.xml dependency-check-${APP_NAME}-b${BUILD_NUMBER}.xml || true
-                mv trivy-report.txt trivy-report-${APP_NAME}-b${BUILD_NUMBER}.txt || true
-                
-                # Archive all the generated reports as tar.gz (ignoring errors if a file is missing)
-                tar -czvf security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz gitleaks-*.json dependency-check-*.xml trivy-report-*.txt || true
-                
-                # Get the dynamically created storage account name
-                export STORAGE_ACCOUNT_NAME=$(az storage account list --resource-group $AKS_RESOURCE_GROUP --query "[?contains(name, 'devsecopsrep')].name" -o tsv)
-                if [ -z "$STORAGE_ACCOUNT_NAME" ]; then
-                    echo "Error: Could not find the security reports storage account."
-                    exit 1
-                fi
-                
-                # Upload to Blob Storage (ensure the container exists or create it)
-                az storage container create --name security-reports --account-name $STORAGE_ACCOUNT_NAME --auth-mode login || true
-                az storage blob upload \\
-                    --account-name $STORAGE_ACCOUNT_NAME \\
-                    --container-name security-reports \\
-                    --name ${APP_NAME}/${BUILD_NUMBER}/security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz \\
-                    --file security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz \\
-                    --auth-mode login
-                '''
+                script { uploadSecurityReports() }
             }
         }
     }
 
     post {
         always {
+            archiveArtifacts artifacts: 'security-reports/**', fingerprint: true
             cleanWs()
         }
+
         success {
-            echo "Frontend deployment executed successfully!"
+            echo "Frontend deployment successful!"
         }
+
         failure {
-            echo "Pipeline failed. Please check the logs."
+            echo "Frontend pipeline failed!"
         }
     }
+}
+
+def runGitleaksScan() {
+    sh '''
+    mkdir -p security-reports
+    gitleaks detect \
+      --source . \
+      --config security/configs/gitleaks.toml \
+      --report-format json \
+      --report-path security-reports/gitleaks-report.json || true
+    '''
+}
+
+def runSonarQubeAnalysis() {
+
+    dir("${env.APP_DIR}") {
+
+        withSonarQubeEnv("${env.SONAR_SERVER_ID}") {
+
+            sh """
+            /opt/sonar-scanner/bin/sonar-scanner \
+            -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} \
+            -Dsonar.sources=. \
+            -Dsonar.ws.timeout=600
+            """
+        }
+    }
+
+    timeout(time: 10, unit: 'MINUTES') {
+        waitForQualityGate abortPipeline: false
+    }
+}
+
+def runDependencyCheck() {
+
+    dir("${env.APP_DIR}") {
+
+        withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
+
+            sh '''
+            mkdir -p /var/lib/jenkins/dependency-check-data || true
+
+            /opt/dependency-check/bin/dependency-check.sh \
+              --project "${APP_NAME}" \
+              --scan . \
+              --format XML \
+              --data /var/lib/jenkins/dependency-check-data \
+              --out dependency-check-report.xml \
+              --nvdApiKey $NVD_API_KEY \
+              --nvdApiDelay 5000 || true
+            '''
+
+            dependencyCheckPublisher pattern: 'dependency-check-report.xml'
+        }
+    }
+}
+
+def buildDockerImage() {
+
+    dockerImage = docker.build(
+        "${env.IMAGE_NAME}:${env.BUILD_NUMBER}",
+        "-f docker/${env.APP_NAME}/Dockerfile ."
+    )
+}
+
+def runTrivyScan() {
+
+    sh '''
+    mkdir -p ~/.cache/trivy
+    mkdir -p security-reports
+
+    trivy image \
+      --cache-dir ~/.cache/trivy \
+      --severity HIGH,CRITICAL \
+      --exit-code 0 \
+      --no-progress \
+      --format table \
+      '${IMAGE_NAME}:${BUILD_NUMBER}' \
+      > security-reports/trivy-report.txt || true
+    '''
+}
+
+def pushDockerImage() {
+
+    docker.withRegistry(
+        "${env.REGISTRY_URL}",
+        "${env.DOCKER_CREDS_ID}"
+    ) {
+
+        dockerImage.push()
+        dockerImage.push("latest")
+    }
+}
+
+def deployToAks() {
+
+    sh '''
+    az login --service-principal \
+      -u $AZURE_CLIENT_ID \
+      -p $AZURE_CLIENT_SECRET \
+      --tenant $AZURE_TENANT_ID
+
+    az account set --subscription $AZURE_SUBSCRIPTION_ID
+
+    az aks command invoke \
+      --resource-group $AKS_RESOURCE_GROUP \
+      --name $AKS_CLUSTER_NAME \
+      --file kubernetes/frontend/deployment.yaml \
+      --file kubernetes/frontend/service.yaml \
+      --command "
+        kubectl apply -f deployment.yaml;
+        kubectl apply -f service.yaml;
+        kubectl set image deployment/shoe-frontend frontend=${IMAGE_NAME}:${BUILD_NUMBER};
+        kubectl rollout status deployment/shoe-frontend
+      "
+    '''
+}
+
+def uploadSecurityReports() {
+
+    sh '''
+    mv security-reports/gitleaks-report.json security-reports/gitleaks-${APP_NAME}-b${BUILD_NUMBER}.json || true
+    mv app/${APP_NAME}/dependency-check-report.xml security-reports/dependency-check-${APP_NAME}-b${BUILD_NUMBER}.xml || true
+    mv security-reports/trivy-report.txt security-reports/trivy-report-${APP_NAME}-b${BUILD_NUMBER}.txt || true
+
+    cd security-reports
+    tar -czvf security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz *.json *.xml *.txt || true
+    cd ..
+
+    STORAGE_ACCOUNT_NAME=$(az storage account list \
+      --resource-group $AKS_RESOURCE_GROUP \
+      --query "[?contains(name, 'devsecopsrep')].name" \
+      -o tsv)
+
+    az storage container create \
+      --name security-reports \
+      --account-name $STORAGE_ACCOUNT_NAME \
+      --auth-mode login || true
+
+    az storage blob upload \
+      --account-name $STORAGE_ACCOUNT_NAME \
+      --container-name security-reports \
+      --name ${APP_NAME}/${BUILD_NUMBER}/security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz \
+      --file security-reports/security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz \
+      --auth-mode login
+    '''
 }

@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
@@ -18,99 +17,56 @@ pipeline {
 
     stages {
 
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Login to Azure') {
             steps {
-                sh '''
-                az login --service-principal \\
-                -u $AZURE_CLIENT_ID \\
-                -p $AZURE_CLIENT_SECRET \\
-                --tenant $AZURE_TENANT_ID
-
-                az account set --subscription $AZURE_SUBSCRIPTION_ID
-                '''
+                script {
+                    loginToAzure()
+                }
             }
         }
 
         stage('Create Postgres Secret') {
             steps {
-                sh '''
-                az aks command invoke \\
-                --resource-group $AKS_RESOURCE_GROUP \\
-                --name $AKS_CLUSTER_NAME \\
-                --command "
-                kubectl delete secret postgres-secret --ignore-not-found;
-                kubectl create secret generic postgres-secret \\
-                --from-literal=POSTGRES_DB=$POSTGRES_DB \\
-                --from-literal=POSTGRES_USER=$POSTGRES_USER \\
-                --from-literal=POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-                "
-                '''
+                script {
+                    createPostgresSecret()
+                }
             }
         }
 
         stage('Trivy Image Scan') {
             steps {
-                sh '''
-                # Pull the target database image locally to scan it
-                docker pull postgres:15
-                
-                # Run Trivy against the official postgres image to detect vulnerabilities
-                mkdir -p ~/.cache/trivy
-                trivy image --cache-dir ~/.cache/trivy --exit-code 0 --severity HIGH,CRITICAL --no-progress --format table postgres:15
-                trivy image --cache-dir ~/.cache/trivy --exit-code 0 --severity HIGH,CRITICAL --no-progress --format json -o trivy-report.json postgres:15
-                '''
+                script {
+                    runTrivyScan()
+                }
             }
         }
 
         stage('Deploy PostgreSQL') {
             steps {
-                sh '''
-                az aks command invoke \\
-                --resource-group $AKS_RESOURCE_GROUP \\
-                --name $AKS_CLUSTER_NAME \\
-                --file kubernetes/postgres/postgres-deployment.yaml \\
-                --file kubernetes/postgres/postgres-service.yaml \\
-                --command "
-                kubectl apply -f postgres-deployment.yaml;
-                kubectl apply -f postgres-service.yaml;
-                kubectl rollout status deployment/postgres
-                "
-                '''
+                script {
+                    deployPostgreSQL()
+                }
             }
         }
 
-        stage('Upload Security Reports to Azure Storage') {
+        stage('Upload Security Reports') {
             steps {
-                sh '''
-                az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
-                az account set --subscription $AZURE_SUBSCRIPTION_ID
-                
-                # Format the report and archive it exactly like the microservices
-                mv trivy-report.json trivy-report-database.json
-                tar -czvf security-reports-database-latest.tar.gz trivy-report-database.json
-                
-                # Get the dynamically created storage account name
-                export STORAGE_ACCOUNT_NAME=$(az storage account list --resource-group $AKS_RESOURCE_GROUP --query "[?contains(name, 'devsecopsrep')].name" -o tsv)
-                if [ -z "$STORAGE_ACCOUNT_NAME" ]; then
-                    echo "Error: Could not find the security reports storage account."
-                    exit 1
-                fi
-                
-                # Ensure container exists and upload the report
-                az storage container create --name security-reports --account-name $STORAGE_ACCOUNT_NAME --auth-mode login || true
-                az storage blob upload \\
-                  --account-name $STORAGE_ACCOUNT_NAME \\
-                  --container-name security-reports \\
-                  --name database/latest/security-reports-database-latest.tar.gz \\
-                  --file security-reports-database-latest.tar.gz \\
-                  --auth-mode login
-                '''
+                script {
+                    uploadSecurityReports()
+                }
             }
         }
     }
 
     post {
         always {
+            archiveArtifacts artifacts: 'security-reports/**', fingerprint: true
             cleanWs()
         }
 
@@ -119,7 +75,102 @@ pipeline {
         }
 
         failure {
-            echo "Database pipeline failed"
+            echo "Database pipeline failed!"
         }
     }
+}
+
+def loginToAzure() {
+    sh '''
+    az login --service-principal \
+      -u $AZURE_CLIENT_ID \
+      -p $AZURE_CLIENT_SECRET \
+      --tenant $AZURE_TENANT_ID
+
+    az account set --subscription $AZURE_SUBSCRIPTION_ID
+    '''
+}
+
+def createPostgresSecret() {
+    sh '''
+    az aks command invoke \
+      --resource-group $AKS_RESOURCE_GROUP \
+      --name $AKS_CLUSTER_NAME \
+      --command "
+        kubectl delete secret postgres-secret --ignore-not-found;
+        kubectl create secret generic postgres-secret \
+        --from-literal=POSTGRES_DB=$POSTGRES_DB \
+        --from-literal=POSTGRES_USER=$POSTGRES_USER \
+        --from-literal=POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+      "
+    '''
+}
+
+def runTrivyScan() {
+    sh '''
+    docker pull postgres:15
+
+    mkdir -p ~/.cache/trivy
+    mkdir -p security-reports
+
+    trivy image \
+      --cache-dir ~/.cache/trivy \
+      --severity HIGH,CRITICAL \
+      --no-progress \
+      --format table postgres:15 || true
+
+    trivy image \
+      --cache-dir ~/.cache/trivy \
+      --severity HIGH,CRITICAL \
+      --no-progress \
+      --format json \
+      -o security-reports/trivy-report-database.json postgres:15 || true
+    '''
+}
+
+def deployPostgreSQL() {
+    sh '''
+    az aks command invoke \
+      --resource-group $AKS_RESOURCE_GROUP \
+      --name $AKS_CLUSTER_NAME \
+      --file kubernetes/postgres/postgres-deployment.yaml \
+      --file kubernetes/postgres/postgres-service.yaml \
+      --command "
+        kubectl apply -f postgres-deployment.yaml;
+        kubectl apply -f postgres-service.yaml;
+        kubectl rollout status deployment/postgres
+      "
+    '''
+}
+
+def uploadSecurityReports() {
+    sh '''
+    mkdir -p security-reports
+
+    cd security-reports
+    tar -czvf security-reports-database-latest.tar.gz trivy-report-database.json || true
+    cd ..
+
+    STORAGE_ACCOUNT_NAME=$(az storage account list \
+        --resource-group $AKS_RESOURCE_GROUP \
+        --query "[?contains(name, 'devsecopsrep')].name" \
+        -o tsv)
+
+    if [ -z "$STORAGE_ACCOUNT_NAME" ]; then
+        echo "Storage account not found"
+        exit 1
+    fi
+
+    az storage container create \
+      --name security-reports \
+      --account-name $STORAGE_ACCOUNT_NAME \
+      --auth-mode login || true
+
+    az storage blob upload \
+      --account-name $STORAGE_ACCOUNT_NAME \
+      --container-name security-reports \
+      --name database/latest/security-reports-database-latest.tar.gz \
+      --file security-reports/security-reports-database-latest.tar.gz \
+      --auth-mode login
+    '''
 }

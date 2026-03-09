@@ -74,18 +74,6 @@ module "aks" {
 }
 
 ############################################
-# ACR Pull Permission for AKS
-############################################
-
-# module "acr_role" {
-#   source = "../../modules/acr-role"
-#
-#   kubelet_identity    = module.aks.kubelet_identity
-#   acr_name            = var.acr_name
-#   resource_group_name = module.rg.rg_name
-# }
-
-############################################
 # Key Vault
 ############################################
 
@@ -102,16 +90,6 @@ module "keyvault" {
   postgres_password = var.postgres_password
   db_host           = var.db_host
 }
-
-############################################
-# Key Vault Role Assignment for AKS CSI Driver
-############################################
-
-# resource "azurerm_role_assignment" "kv_csi" {
-#   scope                = module.keyvault.keyvault_id
-#   role_definition_name = "Key Vault Secrets User"
-#   principal_id         = module.aks.key_vault_secrets_provider_identity_object_id
-# }
 
 ############################################
 # Storage Account for Security Reports
