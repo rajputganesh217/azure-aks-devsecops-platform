@@ -107,7 +107,6 @@ pipeline {
             steps {
 
                 timeout(time: 30, unit: 'MINUTES') {
-
                     waitForQualityGate abortPipeline: false
                 }
             }
@@ -177,9 +176,11 @@ pipeline {
                   --name $AKS_CLUSTER_NAME \
                   --file kubernetes/frontend/deployment.yaml \
                   --file kubernetes/frontend/service.yaml \
+                  --file kubernetes/frontend/ingress.yaml \
                   --command "
                     kubectl apply -f deployment.yaml;
                     kubectl apply -f service.yaml;
+                    kubectl apply -f ingress.yaml;
                     kubectl set image deployment/shoe-frontend frontend=${IMAGE_NAME}:${BUILD_NUMBER};
                     kubectl rollout status deployment/shoe-frontend
                   "
@@ -207,12 +208,10 @@ pipeline {
         }
 
         success {
-
             echo "Frontend deployment successful!"
         }
 
         failure {
-
             echo "Frontend pipeline failed!"
         }
     }
