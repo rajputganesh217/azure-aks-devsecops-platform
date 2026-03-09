@@ -34,67 +34,59 @@ pipeline {
 
                 stage('Gitleaks Scan') {
                     steps {
-                        script {
-                            runGitleaksScan()
-                        }
+                        runGitleaksScan()
                     }
                 }
 
-                stage('SonarQube Analysis') {
+                stage('SonarQube Scan') {
                     steps {
-                        script {
-                            runSonarQubeAnalysis()
-                        }
+                        runSonarScan()
                     }
                 }
 
                 stage('OWASP Dependency Check') {
                     steps {
-                        script {
-                            runDependencyCheck()
-                        }
+                        runDependencyCheck()
                     }
+                }
+            }
+        }
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                timeout(time: 30, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: false
                 }
             }
         }
 
         stage('Docker Build') {
             steps {
-                script {
-                    buildDockerImage()
-                }
+                buildDockerImage()
             }
         }
 
         stage('Trivy Image Scan') {
             steps {
-                script {
-                    runTrivyScan()
-                }
+                runTrivyScan()
             }
         }
 
-        stage('Docker Push to ACR') {
+        stage('Push Image to ACR') {
             steps {
-                script {
-                    pushDockerImage()
-                }
+                pushDockerImage()
             }
         }
 
         stage('Deploy to AKS') {
             steps {
-                script {
-                    deployToAks()
-                }
+                deployToAks()
             }
         }
 
         stage('Upload Security Reports') {
             steps {
-                script {
-                    uploadSecurityReports()
-                }
+                uploadSecurityReports()
             }
         }
     }
@@ -126,43 +118,36 @@ def runGitleaksScan() {
     '''
 }
 
-def runSonarQubeAnalysis() {
+def runSonarScan() {
     dir("${env.APP_DIR}") {
         withSonarQubeEnv("${env.SONAR_SERVER_ID}") {
             sh """
             /opt/sonar-scanner/bin/sonar-scanner \
               -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} \
               -Dsonar.sources=. \
-              -Dsonar.language=py \
+              -Dsonar.python.version=3 \
               -Dsonar.ws.timeout=600
             """
         }
-    }
-
-    timeout(time: 10, unit: 'MINUTES') {
-        waitForQualityGate abortPipeline: false
     }
 }
 
 def runDependencyCheck() {
     dir("${env.APP_DIR}") {
-        withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
+        sh """
+        mkdir -p /var/lib/jenkins/dependency-check-data || true
 
-            sh '''
-            mkdir -p /var/lib/jenkins/dependency-check-data || true
+        /opt/dependency-check/bin/dependency-check.sh \
+          --project "${APP_NAME}" \
+          --scan . \
+          --format XML \
+          --data /var/lib/jenkins/dependency-check-data \
+          --out dependency-check-report.xml \
+          --nvdApiKey ${env.NVD_API_KEY} \
+          --nvdApiDelay 5000 || true
+        """
 
-            /opt/dependency-check/bin/dependency-check.sh \
-              --project "${APP_NAME}" \
-              --scan . \
-              --format XML \
-              --data /var/lib/jenkins/dependency-check-data \
-              --out dependency-check-report.xml \
-              --nvdApiKey $NVD_API_KEY \
-              --nvdApiDelay 5000 || true
-            '''
-
-            dependencyCheckPublisher pattern: 'dependency-check-report.xml'
-        }
+        dependencyCheckPublisher pattern: 'dependency-check-report.xml'
     }
 }
 
@@ -174,19 +159,17 @@ def buildDockerImage() {
 }
 
 def runTrivyScan() {
-    sh '''
-    mkdir -p ~/.cache/trivy
+    sh """
     mkdir -p security-reports
 
     trivy image \
-      --cache-dir ~/.cache/trivy \
       --severity HIGH,CRITICAL \
       --exit-code 0 \
       --no-progress \
       --format table \
-      '${IMAGE_NAME}:${BUILD_NUMBER}' \
+      ${env.IMAGE_NAME}:${env.BUILD_NUMBER} \
       > security-reports/trivy-report.txt || true
-    '''
+    """
 }
 
 def pushDockerImage() {
@@ -226,29 +209,6 @@ def uploadSecurityReports() {
     sh '''
     mkdir -p security-reports
 
-    mv security-reports/gitleaks-report.json security-reports/gitleaks-${APP_NAME}-b${BUILD_NUMBER}.json || true
-    mv app/${APP_NAME}/dependency-check-report.xml security-reports/dependency-check-${APP_NAME}-b${BUILD_NUMBER}.xml || true
-    mv security-reports/trivy-report.txt security-reports/trivy-report-${APP_NAME}-b${BUILD_NUMBER}.txt || true
-
-    cd security-reports
-    tar -czvf security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz *.json *.xml *.txt || true
-    cd ..
-
-    STORAGE_ACCOUNT_NAME=$(az storage account list \
-      --resource-group $AKS_RESOURCE_GROUP \
-      --query "[?contains(name, 'devsecopsrep')].name" \
-      -o tsv)
-
-    az storage container create \
-      --name security-reports \
-      --account-name $STORAGE_ACCOUNT_NAME \
-      --auth-mode login || true
-
-    az storage blob upload \
-      --account-name $STORAGE_ACCOUNT_NAME \
-      --container-name security-reports \
-      --name ${APP_NAME}/${BUILD_NUMBER}/security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz \
-      --file security-reports/security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz \
-      --auth-mode login
+    tar -czvf security-reports/security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz security-reports/* || true
     '''
 }
