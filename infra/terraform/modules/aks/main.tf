@@ -1,4 +1,5 @@
 resource "azurerm_kubernetes_cluster" "aks" {
+
   name                = var.aks_name
   location            = var.location
   resource_group_name = var.resource_group_name
@@ -19,14 +20,34 @@ resource "azurerm_kubernetes_cluster" "aks" {
     network_policy = "calico"
   }
 
+  ############################################
+  # Application Gateway Ingress Controller
+  ############################################
+
+  ingress_application_gateway {
+    gateway_id = var.ingress_application_gateway_id
+  }
+
+  ############################################
+  # KeyVault CSI
+  ############################################
+
   key_vault_secrets_provider {
     secret_rotation_enabled  = true
     secret_rotation_interval = "2m"
   }
 
+  ############################################
+  # Identity
+  ############################################
+
   identity {
     type = "SystemAssigned"
   }
+
+  ############################################
+  # Monitoring
+  ############################################
 
   oms_agent {
     log_analytics_workspace_id = var.log_analytics_workspace_id
