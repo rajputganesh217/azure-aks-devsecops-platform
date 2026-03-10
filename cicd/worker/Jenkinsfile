@@ -112,6 +112,7 @@ pipeline {
     post {
 
         always {
+            archiveArtifacts artifacts: 'security-reports/**', allowEmptyArchive: true
             cleanWs()
         }
 
