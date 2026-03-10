@@ -1,7 +1,7 @@
 pipeline {
 agent any
 
-```
+
 options {
     disableConcurrentBuilds()
     buildDiscarder(logRotator(numToKeepStr: '10'))
@@ -119,13 +119,13 @@ post {
         echo "Terraform pipeline failed"
     }
 }
-```
+
 
 }
 
 def prepareWorkspace() {
 
-```
+
 env.COMMIT_ID = sh(
     script: "git rev-parse --short=8 HEAD",
     returnStdout: true
@@ -137,13 +137,13 @@ mkdir -p security-reports
 '''
 
 echo "Workspace ready for commit ${env.COMMIT_ID}"
-```
+
 
 }
 
 def runCheckovScan() {
 
-```
+
 sh """
 checkov -d ${env.TF_DIR} \
   --framework terraform \
@@ -151,26 +151,26 @@ checkov -d ${env.TF_DIR} \
   -o json \
   > security-reports/checkov-${params.ENVIRONMENT}.json || true
 """
-```
+
 
 }
 
 def runGitleaksScan() {
 
-```
+
 sh """
 gitleaks detect \
   --source . \
   --report-format json \
   --report-path security-reports/gitleaks.json || true
 """
-```
+
 
 }
 
 def terraformInit() {
 
-```
+
 dir("${env.TF_DIR}") {
 
     sh """
@@ -179,35 +179,35 @@ dir("${env.TF_DIR}") {
       -reconfigure
     """
 }
-```
+
 
 }
 
 def terraformFmt() {
 
-```
+
 dir("${env.TF_DIR}") {
 
     sh "terraform fmt -check || true"
 }
-```
+
 
 }
 
 def terraformValidate() {
 
-```
+
 dir("${env.TF_DIR}") {
 
     sh "terraform validate"
 }
-```
+
 
 }
 
 def terraformPlan() {
 
-```
+
 dir("${env.TF_DIR}") {
 
     sh """
@@ -217,13 +217,13 @@ dir("${env.TF_DIR}") {
       -out=tfplan-${params.ENVIRONMENT}.out
     """
 }
-```
+
 
 }
 
 def terraformExecute() {
 
-```
+
 dir("${env.TF_DIR}") {
 
     if (params.ACTION == 'apply') {
@@ -246,13 +246,13 @@ dir("${env.TF_DIR}") {
         """
     }
 }
-```
+
 
 }
 
 def uploadReports() {
 
-```
+
 sh """
 
 az login --service-principal \
@@ -269,6 +269,6 @@ az storage blob upload-batch \
   --source security-reports \
   --auth-mode login
 """
-```
+
 
 }
