@@ -1,11 +1,9 @@
 pipeline {
-
     agent any
 
     environment {
-
         STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
-
+        
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
@@ -14,16 +12,18 @@ pipeline {
         AKS_RESOURCE_GROUP = "aks-microservices-rg"
         AKS_CLUSTER_NAME   = "microservices-aks"
 
-        POSTGRES_USER     = credentials('POSTGRES_USER')
-        POSTGRES_PASSWORD = credentials('POSTGRES_PASSWORD')
-        POSTGRES_DB       = credentials('POSTGRES_DB')
+        POSTGRES_USER      = credentials('POSTGRES_USER')
+        POSTGRES_PASSWORD  = credentials('POSTGRES_PASSWORD')
+        POSTGRES_DB        = credentials('POSTGRES_DB')
     }
 
     stages {
-
         stage('Prepare') {
             steps {
-                sh "mkdir -p security-reports"
+                script {
+                    env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
+                    sh "rm -rf security-reports && mkdir -p security-reports"
+                }
             }
         }
 
@@ -31,11 +31,20 @@ pipeline {
             steps { script { loginAzure() } }
         }
 
+        stage('Security: Manifest Scan') {
+            steps {
+                script {
+                    // Kube-score checks for best practices in your YAML files
+                    sh "docker run --rm -v \$(pwd):/project zegl/kube-score:latest score kubernetes/postgres/*.yaml > security-reports/kube-score-database.txt || true"
+                }
+            }
+        }
+
         stage('Create Secret') {
             steps { script { createSecret() } }
         }
 
-        stage('Trivy Scan Postgres') {
+        stage('Security: Image Scan') {
             steps { script { scanPostgres() } }
         }
 
@@ -56,103 +65,62 @@ pipeline {
     }
 }
 
-
-
-
-
 def loginAzure() {
-
-    sh """
-    az login --service-principal \
-    -u $AZURE_CLIENT_ID \
-    -p $AZURE_CLIENT_SECRET \
-    --tenant $AZURE_TENANT_ID
-
+    sh '''
+    az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
     az account set --subscription $AZURE_SUBSCRIPTION_ID
-    """
+    '''
 }
-
-
-
-
 
 def createSecret() {
-
-    sh """
-
+    sh '''
     az aks command invoke \
-    --resource-group $AKS_RESOURCE_GROUP \
-    --name $AKS_CLUSTER_NAME \
-    --command "
-
-    kubectl delete secret postgres-secret --ignore-not-found;
-
-    kubectl create secret generic postgres-secret \
-    --from-literal=POSTGRES_DB=$POSTGRES_DB \
-    --from-literal=POSTGRES_USER=$POSTGRES_USER \
-    --from-literal=POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-
-    "
-    """
+      --resource-group $AKS_RESOURCE_GROUP \
+      --name $AKS_CLUSTER_NAME \
+      --command "
+        kubectl delete secret postgres-secret --ignore-not-found;
+        kubectl create secret generic postgres-secret \
+        --from-literal=POSTGRES_DB=$POSTGRES_DB \
+        --from-literal=POSTGRES_USER=$POSTGRES_USER \
+        --from-literal=POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+      "
+    '''
 }
-
-
-
-
 
 def scanPostgres() {
-
-    sh """
-
+    sh '''
     docker pull postgres:15
-
-    trivy image --quiet \
-    --severity HIGH,CRITICAL \
-    --format json \
-    -o security-reports/trivy-postgres.json \
-    postgres:15 || true
-
-    """
+    # Added timeout and no-progress to prevent 'context deadline exceeded'
+    trivy image --quiet --no-progress --timeout 15m \
+      --severity HIGH,CRITICAL \
+      --format json \
+      -o security-reports/trivy-postgres.json \
+      postgres:15 || true
+    '''
 }
-
-
-
-
 
 def deployPostgres() {
-
-    sh """
-
+    sh '''
     az aks command invoke \
-    --resource-group $AKS_RESOURCE_GROUP \
-    --name $AKS_CLUSTER_NAME \
-    --file kubernetes/postgres/postgres-deployment.yaml \
-    --file kubernetes/postgres/postgres-service.yaml \
-    --command "
-
-    kubectl apply -f postgres-deployment.yaml;
-    kubectl apply -f postgres-service.yaml;
-
-    kubectl rollout status deployment/postgres
-
-    "
-    """
+      --resource-group $AKS_RESOURCE_GROUP \
+      --name $AKS_CLUSTER_NAME \
+      --file kubernetes/postgres/postgres-deployment.yaml \
+      --file kubernetes/postgres/postgres-service.yaml \
+      --command "
+        kubectl apply -f postgres-deployment.yaml;
+        kubectl apply -f postgres-service.yaml;
+        kubectl rollout status deployment/postgres --timeout=300s
+      "
+    '''
 }
 
-
-
-
-
 def uploadReports() {
-
-    sh """
-
+    sh '''
+    # Organizing reports by database/commit_id
     az storage blob upload-batch \
-    --account-name ${STORAGE_ACCOUNT} \
-    --destination security-reports \
-    --destination-path database \
-    --source security-reports \
-    --auth-mode login
-
-    """
+      --account-name $STORAGE_ACCOUNT \
+      --destination security-reports/database/$COMMIT_ID \
+      --source security-reports \
+      --auth-mode login
+    '''
 }
