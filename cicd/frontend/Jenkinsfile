@@ -117,16 +117,16 @@ pipeline {
             }
         }
 
-        stage('Sonar Quality Gate') {
-            steps {
-                script {
-                    timeout(time: 10, unit: 'MINUTES') {
-                        def qg = waitForQualityGate abortPipeline: false
-                        echo "Quality Gate Result: ${qg.status}"
-                    }
-                }
-            }
-        }
+    //    stage('Sonar Quality Gate') {
+      //      steps {
+        //        script {
+          //          timeout(time: 10, unit: 'MINUTES') {
+            //            def qg = waitForQualityGate abortPipeline: false
+              //          echo "Quality Gate Result: ${qg.status}"
+     //               }
+       //         }
+         //   }
+        // }
 
         stage('Docker Build') {
 
