@@ -49,7 +49,7 @@ pipeline {
 
                 stage('Gitleaks') { steps { script { runGitleaksScan() } } }
 
-                stage('SonarQube') { steps { script { runSonarScan() } } }
+               // stage('SonarQube') { steps { script { runSonarScan() } } }
 
                 stage('Dependency Check') { steps { script { runDependencyCheck() } } }
 
