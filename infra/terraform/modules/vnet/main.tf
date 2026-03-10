@@ -68,8 +68,8 @@ resource "azurerm_network_security_group" "public_nsg" {
 }
 
 resource "azurerm_subnet_network_security_group_association" "public_assoc" {
-  for_each                  = azurerm_subnet.public
-  subnet_id                 = each.value.id
+  for_each                  = var.public_subnets
+  subnet_id                 = azurerm_subnet.public[each.key].id
   network_security_group_id = azurerm_network_security_group.public_nsg.id
 }
 
@@ -143,8 +143,8 @@ resource "azurerm_network_security_group" "app_nsg" {
 }
 
 resource "azurerm_subnet_network_security_group_association" "app_assoc" {
-  for_each                  = azurerm_subnet.app
-  subnet_id                 = each.value.id
+  for_each                  = var.app_subnets
+  subnet_id                 = azurerm_subnet.app[each.key].id
   network_security_group_id = azurerm_network_security_group.app_nsg.id
 }
 
@@ -206,7 +206,7 @@ resource "azurerm_network_security_group" "db_nsg" {
 }
 
 resource "azurerm_subnet_network_security_group_association" "db_assoc" {
-  for_each                  = azurerm_subnet.db
-  subnet_id                 = each.value.id
+  for_each                  = var.db_subnets
+  subnet_id                 = azurerm_subnet.db[each.key].id
   network_security_group_id = azurerm_network_security_group.db_nsg.id
 }
