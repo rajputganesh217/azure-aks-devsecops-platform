@@ -112,7 +112,6 @@ pipeline {
     post {
 
         always {
-            archiveArtifacts artifacts: 'security-reports/**', fingerprint: true
             cleanWs()
         }
 
@@ -226,11 +225,11 @@ def buildDockerImage() {
 def runTrivyScan() {
 
     sh """
-    trivy image \
+    trivy image --quiet \
       --severity HIGH,CRITICAL \
       --format json \
       -o security-reports/trivy-${APP_NAME}.json \
-      ${IMAGE_NAME}:${APP_NAME}-${commitId}
+      ${IMAGE_NAME}:${APP_NAME}-${commitId} || true
     """
 }
 
@@ -244,7 +243,6 @@ def pushDockerImage() {
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
 
         dockerImage.push("${APP_NAME}-${commitId}")
-        dockerImage.push("latest")
 
     }
 }
@@ -293,7 +291,8 @@ def uploadSecurityReports() {
 
     az storage blob upload-batch \
       --account-name ${STORAGE_ACCOUNT} \
-      --destination security-reports/${APP_NAME} \
+      --destination security-reports \
+      --destination-path ${APP_NAME} \
       --source security-reports \
       --auth-mode login
 

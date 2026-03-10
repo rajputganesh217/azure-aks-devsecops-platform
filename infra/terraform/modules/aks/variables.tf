@@ -17,3 +17,9 @@ variable "ingress_application_gateway_id" {
   type        = string
   default     = null
 }
+
+variable "tags" {
+  description = "A mapping of tags to assign to the resource"
+  type        = map(string)
+  default     = {}
+}

@@ -3,6 +3,10 @@ resource "azurerm_virtual_network" "vnet" {
   address_space       = var.vnet_address_space
   location            = var.location
   resource_group_name = var.resource_group_name
+
+  tags = merge(var.tags, {
+    Name = var.vnet_name
+  })
 }
 
 # -------------------------
@@ -57,6 +61,10 @@ resource "azurerm_network_security_group" "public_nsg" {
     source_address_prefix      = "GatewayManager"
     destination_address_prefix = "*"
   }
+
+  tags = merge(var.tags, {
+    Name = "${var.vnet_name}-public-nsg"
+  })
 }
 
 resource "azurerm_subnet_network_security_group_association" "public_assoc" {
@@ -128,6 +136,10 @@ resource "azurerm_network_security_group" "app_nsg" {
     source_address_prefix      = "Internet"
     destination_address_prefix = "*"
   }
+
+  tags = merge(var.tags, {
+    Name = "${var.vnet_name}-app-nsg"
+  })
 }
 
 resource "azurerm_subnet_network_security_group_association" "app_assoc" {
@@ -187,6 +199,10 @@ resource "azurerm_network_security_group" "db_nsg" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+
+  tags = merge(var.tags, {
+    Name = "${var.vnet_name}-db-nsg"
+  })
 }
 
 resource "azurerm_subnet_network_security_group_association" "db_assoc" {

@@ -108,10 +108,6 @@ post {
 
     always {
 
-        archiveArtifacts artifacts: 'security-reports/**/*.json, **/*.out',
-                         allowEmptyArchive: true,
-                         fingerprint: true
-
         cleanWs()
     }
 
@@ -268,7 +264,8 @@ az account set --subscription $ARM_SUBSCRIPTION_ID
 
 az storage blob upload-batch \
   --account-name ${REPORTS_STORAGE} \
-  --destination security-reports/terraform/${params.ENVIRONMENT}/${env.COMMIT_ID} \
+  --destination security-reports \
+  --destination-path terraform/${params.ENVIRONMENT}/${env.COMMIT_ID} \
   --source security-reports \
   --auth-mode login
 """

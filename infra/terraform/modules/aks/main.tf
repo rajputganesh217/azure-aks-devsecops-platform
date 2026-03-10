@@ -53,8 +53,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
     log_analytics_workspace_id = var.log_analytics_workspace_id
   }
 
-  tags = {
-    environment = "dev"
-    project     = "aks-microservices"
-  }
+  tags = merge(var.tags, {
+    Name = var.aks_name
+  })
 }

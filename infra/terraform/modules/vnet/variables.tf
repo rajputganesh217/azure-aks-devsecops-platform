@@ -49,3 +49,9 @@ variable "db_subnets" {
     "subnet-private-db-az3" = "10.0.22.0/24"
   }
 }
+
+variable "tags" {
+  description = "A mapping of tags to assign to the resource"
+  type        = map(string)
+  default     = {}
+}

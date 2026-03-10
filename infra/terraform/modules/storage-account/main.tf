@@ -7,6 +7,10 @@ resource "azurerm_storage_account" "sa" {
 
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
+
+  tags = merge(var.tags, {
+    Name = var.storage_account_name
+  })
 }
 
 resource "azurerm_storage_container" "reports" {

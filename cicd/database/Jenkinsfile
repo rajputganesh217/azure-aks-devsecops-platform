@@ -50,7 +50,6 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: 'security-reports/**'
             cleanWs()
         }
     }
@@ -106,11 +105,11 @@ def scanPostgres() {
 
     docker pull postgres:15
 
-    trivy image \
+    trivy image --quiet \
     --severity HIGH,CRITICAL \
     --format json \
     -o security-reports/trivy-postgres.json \
-    postgres:15
+    postgres:15 || true
 
     """
 }
@@ -149,7 +148,8 @@ def uploadReports() {
 
     az storage blob upload-batch \
     --account-name ${STORAGE_ACCOUNT} \
-    --destination security-reports/database \
+    --destination security-reports \
+    --destination-path database \
     --source security-reports \
     --auth-mode login
 

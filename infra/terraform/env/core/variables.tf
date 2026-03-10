@@ -91,3 +91,18 @@ variable "db_subnets" {
   description = "Map of private db subnets (name => prefix)"
   type        = map(string)
 }
+
+variable "project" {
+  type    = string
+  default = "devsecops-platform"
+}
+
+variable "owner" {
+  type    = string
+  default = "cloud-team"
+}
+
+variable "cost_center" {
+  type    = string
+  default = "CC1001"
+}

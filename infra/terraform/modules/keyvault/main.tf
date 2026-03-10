@@ -27,6 +27,10 @@ resource "azurerm_key_vault" "kv" {
       "List"
     ]
   }
+
+  tags = merge(var.tags, {
+    Name = var.keyvault_name
+  })
 }
 
 data "azurerm_client_config" "current" {}

@@ -5,6 +5,10 @@ resource "azurerm_public_ip" "appgw_pip" {
 
   allocation_method = "Static"
   sku               = "Standard"
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-pip"
+  })
 }
 
 resource "azurerm_application_gateway" "appgw" {
@@ -68,8 +72,7 @@ resource "azurerm_application_gateway" "appgw" {
     priority                   = 100
   }
 
-  tags = {
-    environment = "dev"
-    project     = "aks-microservices"
-  }
+  tags = merge(var.tags, {
+    Name = var.name
+  })
 }

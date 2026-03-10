@@ -7,6 +7,19 @@ resource "random_string" "suffix" {
 data "azurerm_client_config" "current" {}
 
 ############################################
+# Tag Module
+############################################
+
+module "tags" {
+  source = "../../modules/tag"
+
+  environment = var.environment
+  project     = var.project
+  owner       = var.owner
+  cost_center = var.cost_center
+}
+
+############################################
 # Resource Group
 ############################################
 
@@ -15,6 +28,7 @@ module "rg" {
 
   resource_group_name = var.resource_group_name
   location            = var.location
+  tags                = module.tags.tags
 }
 
 ############################################
@@ -26,6 +40,7 @@ module "log_analytics" {
 
   location            = var.location
   resource_group_name = module.rg.rg_name
+  tags                = module.tags.tags
 }
 ############################################
 # Virtual Network (Hub and Spoke)
@@ -42,6 +57,7 @@ module "vnet" {
   public_subnets     = var.public_subnets
   app_subnets        = var.app_subnets
   db_subnets         = var.db_subnets
+  tags               = module.tags.tags
 }
 
 ############################################
@@ -54,6 +70,7 @@ module "acr" {
   acr_name            = var.acr_name
   location            = var.location
   resource_group_name = module.rg.rg_name
+  tags                = module.tags.tags
 }
 ############################################
 # Application Gateway
@@ -70,6 +87,7 @@ module "app_gateway" {
   subnet_id = module.vnet.public_subnet_ids["subnet-public-az1"]
 
   capacity = 2
+  tags     = module.tags.tags
 }
 
 
@@ -82,18 +100,19 @@ module "aks" {
 
   source = "../../modules/aks"
 
-  aks_name                   = var.aks_name
-  location                   = var.location
-  resource_group_name        = module.rg.rg_name
-  dns_prefix                 = var.dns_prefix
-  node_count                 = var.node_count
-  vm_size                    = var.vm_size
+  aks_name            = var.aks_name
+  location            = var.location
+  resource_group_name = module.rg.rg_name
+  dns_prefix          = var.dns_prefix
+  node_count          = var.node_count
+  vm_size             = var.vm_size
 
   log_analytics_workspace_id = module.log_analytics.workspace_id
 
   vnet_subnet_id = module.vnet.app_subnet_ids["subnet-private-app-az1"]
 
   ingress_application_gateway_id = module.app_gateway.appgw_id
+  tags                           = module.tags.tags
 }
 
 ############################################
@@ -112,6 +131,7 @@ module "keyvault" {
   postgres_user     = var.postgres_user
   postgres_password = var.postgres_password
   db_host           = var.db_host
+  tags              = module.tags.tags
 }
 
 ############################################
@@ -124,4 +144,5 @@ module "storage_account" {
   storage_account_name = "${var.environment}devsecopsrep${random_string.suffix.result}"
   location             = var.location
   resource_group_name  = module.rg.rg_name
+  tags                 = module.tags.tags
 }

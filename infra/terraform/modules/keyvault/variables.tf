@@ -41,3 +41,9 @@ variable "db_host" {
   type      = string
   sensitive = true
 }
+
+variable "tags" {
+  description = "A mapping of tags to assign to the resource"
+  type        = map(string)
+  default     = {}
+}
