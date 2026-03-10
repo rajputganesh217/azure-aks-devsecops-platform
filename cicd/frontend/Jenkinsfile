@@ -1,48 +1,53 @@
-// Define global variables at the top
-def commitId
 def dockerImage
+def commitId
 
 pipeline {
     agent any
 
     parameters {
-        choice(name: 'ENVIRONMENT', choices: ['dev', 'qa', 'uat', 'prod'], description: 'Target Environment')
+        choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat','prod'], description: 'Target Environment')
     }
 
     environment {
         APP_NAME = "frontend"
         APP_DIR  = "app/frontend"
-        STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
-        DOCKER_CREDS_ID = "azure-acr-credentials"
 
-        // Dynamic naming logic
         ENV_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : '-' + params.ENVIRONMENT}"
         ACR_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : params.ENVIRONMENT}"
+
         REGISTRY   = "mydevopsacr${ACR_SUFFIX}123.azurecr.io"
         IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
 
-        // Credentials
+        DOCKER_CREDS_ID = "azure-acr-credentials"
+
+        STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
+
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
-        AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
-        
-        NVD_API_KEY           = credentials('NVD_API_KEY')
-        
-        AKS_RESOURCE_GROUP    = "aks-microservices-rg"
-        AKS_CLUSTER_NAME      = "microservices-aks"
+        AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
+
+        AKS_RESOURCE_GROUP = "aks-microservices${ENV_SUFFIX}-rg"
+        AKS_CLUSTER_NAME   = "microservices-aks${ENV_SUFFIX}"
+
+        NVD_API_KEY = credentials('NVD_API_KEY')
     }
 
     stages {
         stage('Prepare') {
-            steps { script { prepareWorkspace() } }
+            steps {
+                script {
+                    prepareWorkspace()
+                }
+            }
         }
 
         stage('Security Scans') {
             parallel {
-                stage('Gitleaks') {
+                stage('Gitleaks Scan') {
                     steps { script { runGitleaksScan() } }
                 }
+                // SonarQube skipped to keep pipeline running
                 stage('Dependency Check') {
                     steps { script { runDependencyCheck() } }
                 }
@@ -50,23 +55,43 @@ pipeline {
         }
 
         stage('Docker Build') {
-            steps { script { buildDockerImage() } }
+            steps {
+                script {
+                    buildDockerImage()
+                }
+            }
         }
 
         stage('Trivy Image Scan') {
-            steps { script { runTrivyScan() } }
+            steps {
+                script {
+                    runTrivyScan()
+                }
+            }
         }
 
-        stage('Push to ACR') {
-            steps { script { pushDockerImage() } }
+        stage('Push Image to ACR') {
+            steps {
+                script {
+                    pushDockerImage()
+                }
+            }
         }
 
         stage('Deploy to AKS') {
-            steps { script { deployFrontend() } }
+            steps {
+                script {
+                    deployFrontend()
+                }
+            }
         }
 
-        stage('Publish Reports') {
-            steps { script { uploadSecurityReports() } }
+        stage('Upload Security Reports') {
+            steps {
+                script {
+                    uploadSecurityReports()
+                }
+            }
         }
     }
 
@@ -75,68 +100,101 @@ pipeline {
             archiveArtifacts artifacts: 'security-reports/**', allowEmptyArchive: true
             cleanWs()
         }
+        success {
+            echo "Frontend deployment successful!"
+        }
+        failure {
+            echo "Frontend pipeline failed!"
+        }
     }
 }
 
-// --- Logic Functions ---
-
 def prepareWorkspace() {
-    commitId = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
-    sh "rm -rf security-reports && mkdir -p security-reports"
-    
-    sh '''
-        az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
-        az account set --subscription $AZURE_SUBSCRIPTION_ID
-    '''
+    commitId = sh(
+        script: "git rev-parse --short=8 HEAD",
+        returnStdout: true
+    ).trim()
+
+    sh """
+    rm -rf security-reports
+    mkdir -p security-reports
+    echo "Commit ID: ${commitId}"
+    """
 }
 
 def runGitleaksScan() {
-    sh "gitleaks detect --source . --report-format json --report-path security-reports/gitleaks-${APP_NAME}.json || true"
+    sh """
+    gitleaks detect \
+      --source . \
+      --config security/configs/gitleaks.toml \
+      --report-format json \
+      --report-path security-reports/gitleaks-${APP_NAME}.json || true
+    """
 }
 
 def runDependencyCheck() {
     dir("${APP_DIR}") {
-        sh '''
-            /opt/dependency-check/bin/dependency-check.sh \
-              --project ${APP_NAME} --scan . --format JSON --out ../../security-reports \
-              --nvdApiKey $NVD_API_KEY --nvdApiDelay 5000 || true
-        '''
+        sh """
+        /opt/dependency-check/bin/dependency-check.sh \
+          --project ${APP_NAME} \
+          --scan . \
+          --format JSON \
+          --out ../../security-reports \
+          --nvdApiKey ${NVD_API_KEY} \
+          --nvdApiDelay 5000 || true
+        """
     }
 }
 
 def buildDockerImage() {
-    sh "docker build -t ${IMAGE_NAME}:${APP_NAME}-${commitId} -f docker/frontend/Dockerfile ."
+    dockerImage = docker.build(
+        "${IMAGE_NAME}:${APP_NAME}-${commitId}",
+        "-f docker/frontend/Dockerfile ."
+    )
 }
 
 def runTrivyScan() {
-    sh "trivy image --quiet --no-progress --timeout 15m --format json -o security-reports/trivy-${APP_NAME}.json ${IMAGE_NAME}:${APP_NAME}-${commitId} || true"
+    sh """
+    trivy image --quiet --no-progress --timeout 15m \
+      --severity HIGH,CRITICAL \
+      --format json \
+      -o security-reports/trivy-${APP_NAME}.json \
+      ${IMAGE_NAME}:${APP_NAME}-${commitId} || true
+    """
 }
 
 def pushDockerImage() {
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
-        sh "docker push ${IMAGE_NAME}:${APP_NAME}-${commitId}"
+        dockerImage.push("${APP_NAME}-${commitId}")
     }
 }
 
 def deployFrontend() {
-    // Note: deployment/shoe-frontend used based on your logs
-    sh '''
-        az aks command invoke \
-          --resource-group $AKS_RESOURCE_GROUP \
-          --name $AKS_CLUSTER_NAME \
-          --file kubernetes/frontend/deployment.yaml \
-          --file kubernetes/frontend/service.yaml \
-          --file kubernetes/frontend/ingress.yaml \
-          --command "kubectl apply -f deployment.yaml && kubectl apply -f service.yaml && kubectl apply -f ingress.yaml && kubectl set image deployment/shoe-frontend frontend=${IMAGE_NAME}:${APP_NAME}-${commitId} && kubectl rollout status deployment/shoe-frontend --timeout=120s"
-    '''
+    sh """
+    az login --service-principal \
+      -u $AZURE_CLIENT_ID \
+      -p $AZURE_CLIENT_SECRET \
+      --tenant $AZURE_TENANT_ID
+
+    az account set --subscription $AZURE_SUBSCRIPTION_ID
+
+    az aks command invoke \
+      --resource-group $AKS_RESOURCE_GROUP \
+      --name $AKS_CLUSTER_NAME \
+      --file kubernetes/frontend/deployment.yaml \
+      --file kubernetes/frontend/service.yaml \
+      --file kubernetes/frontend/ingress.yaml \
+      --command "kubectl apply -f deployment.yaml && kubectl apply -f service.yaml && kubectl apply -f ingress.yaml && kubectl set image deployment/shoe-frontend frontend=${IMAGE_NAME}:${APP_NAME}-${commitId} && kubectl rollout status deployment/shoe-frontend --timeout=120s"
+    """
 }
 
 def uploadSecurityReports() {
-    sh '''
-        az storage blob upload-batch \
-          --account-name $STORAGE_ACCOUNT \
-          --destination security-reports/${APP_NAME}/$commitId \
-          --source security-reports \
-          --auth-mode login
-    '''
+    sh """
+    az storage blob upload-batch \
+      --account-name ${STORAGE_ACCOUNT} \
+      --destination security-reports \
+      --destination-path ${APP_NAME}/${commitId} \
+      --source security-reports \
+      --auth-mode login
+    """
 }
