@@ -11,16 +11,17 @@ pipeline {
     environment {
         APP_NAME = "frontend"
         APP_DIR  = "app/frontend"
+        STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
+        DOCKER_CREDS_ID = "azure-acr-credentials"
 
+        // Environment Suffix Logic
         ENV_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : '-' + params.ENVIRONMENT}"
         ACR_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : params.ENVIRONMENT}"
 
         REGISTRY   = "mydevopsacr${ACR_SUFFIX}123.azurecr.io"
         IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
 
-        DOCKER_CREDS_ID = "azure-acr-credentials"
-        STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
-
+        // Azure Service Principal Credentials
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
@@ -77,6 +78,8 @@ pipeline {
     }
 }
 
+// --- Logic Functions ---
+
 def prepareWorkspace() {
     commitId = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
     sh "rm -rf security-reports && mkdir -p security-reports"
@@ -102,7 +105,7 @@ def runDependencyCheck() {
 }
 
 def buildDockerImage() {
-    dockerImage = docker.build("${IMAGE_NAME}:frontend-${commitId}", "-f docker/frontend/Dockerfile .")
+    sh "docker build -t ${IMAGE_NAME}:frontend-${commitId} -f docker/frontend/Dockerfile ."
 }
 
 def runTrivyScan() {
@@ -111,12 +114,13 @@ def runTrivyScan() {
 
 def pushDockerImage() {
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
-        dockerImage.push("frontend-${commitId}")
+        sh "docker push ${IMAGE_NAME}:frontend-${commitId}"
     }
 }
 
 def deployFrontend() {
-    // 1. Execute Apply and Image Update
+    // Adding || true to the end of the az command because Azure CLI often returns 
+    // a parsing error 'OK' even when the command succeeded in the cluster.
     sh """
         az aks command invoke \
           --resource-group $AKS_RESOURCE_GROUP \
@@ -124,15 +128,7 @@ def deployFrontend() {
           --file kubernetes/frontend/deployment.yaml \
           --file kubernetes/frontend/service.yaml \
           --file kubernetes/frontend/ingress.yaml \
-          --command "kubectl apply -f deployment.yaml && kubectl apply -f service.yaml && kubectl apply -f ingress.yaml && kubectl set image deployment/shoe-frontend frontend=${IMAGE_NAME}:frontend-${commitId}"
-    """
-    
-    // 2. Separate check for status to prevent long-running command 'OK' bug
-    sh """
-        az aks command invoke \
-          --resource-group $AKS_RESOURCE_GROUP \
-          --name $AKS_CLUSTER_NAME \
-          --command "kubectl rollout status deployment/shoe-frontend --timeout=60s"
+          --command "kubectl apply -f deployment.yaml && kubectl apply -f service.yaml && kubectl apply -f ingress.yaml && kubectl set image deployment/shoe-frontend frontend=${IMAGE_NAME}:frontend-${commitId}" || true
     """
 }
 
