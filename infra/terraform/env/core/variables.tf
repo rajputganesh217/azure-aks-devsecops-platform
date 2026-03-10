@@ -61,6 +61,13 @@ variable "postgres_password" {
 variable "db_host" {
   type      = string
   sensitive = true
+  default   = "postgres.default.svc.cluster.local"
+}
+
+variable "commit_id" {
+  type        = string
+  description = "Commit ID for tagging or tracking"
+  default     = ""
 }
 
 ############################################
