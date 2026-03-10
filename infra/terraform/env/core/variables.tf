@@ -24,6 +24,11 @@ variable "dns_prefix" {
   type = string
 }
 
+variable "aks_vnet_subnet_id" {
+  type    = string
+  default = ""
+}
+
 variable "node_count" {
   type = number
 }

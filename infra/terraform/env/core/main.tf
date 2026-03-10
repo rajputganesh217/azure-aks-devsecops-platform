@@ -109,7 +109,7 @@ module "aks" {
 
   log_analytics_workspace_id = module.log_analytics.workspace_id
 
-  vnet_subnet_id = module.vnet.app_subnet_ids["subnet-private-app-az1"]
+  vnet_subnet_id = var.aks_vnet_subnet_id != "" ? var.aks_vnet_subnet_id : module.vnet.app_subnet_ids["subnet-private-app-az1"]
 
   ingress_application_gateway_id = module.app_gateway.appgw_id
   tags                           = module.tags.tags
