@@ -3,8 +3,9 @@ kind: Ingress
 metadata:
   name: shoe-ingress
   annotations:
+    kubernetes.io/ingress.class: azure/application-gateway
     appgw.ingress.kubernetes.io/backend-path-prefix: "/"
-    appgw.ingress.kubernetes.io/health-probe-path: "/"
+    appgw.ingress.kubernetes.io/health-probe-path: "/health.html"
 spec:
   ingressClassName: azure-application-gateway
   rules:
