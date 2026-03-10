@@ -42,11 +42,22 @@ pipeline {
             }
         }
 
+        stage('Wait for SonarQube') {
+            steps {
+                sh '''
+                echo "Waiting for SonarQube..."
+                until curl -s http://localhost:9000/system/status | grep -q "UP"; do
+                  sleep 5
+                done
+                '''
+            }
+        }
+
         stage('Security Scans') {
 
             parallel {
 
-                stage('Gitleaks Scan') {
+                stage('Gitleaks') {
                     steps {
                         sh '''
                         mkdir -p security-reports
@@ -61,12 +72,16 @@ pipeline {
                 }
 
                 stage('SonarQube Scan') {
+
                     steps {
+
                         dir("${APP_DIR}") {
 
                             withSonarQubeEnv("${SONAR_SERVER_ID}") {
 
                                 sh """
+                                node -v || true
+
                                 /opt/sonar-scanner/bin/sonar-scanner \
                                   -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
                                   -Dsonar.sources=. \
@@ -78,6 +93,7 @@ pipeline {
                 }
 
                 stage('OWASP Dependency Check') {
+
                     steps {
 
                         dir("${APP_DIR}") {
@@ -106,8 +122,14 @@ pipeline {
 
             steps {
 
-                timeout(time: 30, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: false
+                script {
+
+                    timeout(time: 10, unit: 'MINUTES') {
+
+                        def qg = waitForQualityGate()
+
+                        echo "Quality Gate Status: ${qg.status}"
+                    }
                 }
             }
         }
@@ -126,7 +148,7 @@ pipeline {
             }
         }
 
-        stage('Trivy Image Scan') {
+        stage('Trivy Scan') {
 
             steps {
 
@@ -144,7 +166,7 @@ pipeline {
             }
         }
 
-        stage('Push Image to ACR') {
+        stage('Push Image') {
 
             steps {
 
@@ -208,10 +230,12 @@ pipeline {
         }
 
         success {
+
             echo "Frontend deployment successful!"
         }
 
         failure {
+
             echo "Frontend pipeline failed!"
         }
     }
