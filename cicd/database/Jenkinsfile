@@ -1,176 +1,157 @@
 pipeline {
+
     agent any
 
     environment {
+
+        STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
+
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        AKS_RESOURCE_GROUP    = "aks-microservices-rg"
-        AKS_CLUSTER_NAME      = "microservices-aks"
+        AKS_RESOURCE_GROUP = "aks-microservices-rg"
+        AKS_CLUSTER_NAME   = "microservices-aks"
 
-        POSTGRES_USER         = credentials('POSTGRES_USER')
-        POSTGRES_PASSWORD     = credentials('POSTGRES_PASSWORD')
-        POSTGRES_DB           = credentials('POSTGRES_DB')
+        POSTGRES_USER     = credentials('POSTGRES_USER')
+        POSTGRES_PASSWORD = credentials('POSTGRES_PASSWORD')
+        POSTGRES_DB       = credentials('POSTGRES_DB')
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Prepare') {
             steps {
-                checkout scm
+                sh "mkdir -p security-reports"
             }
         }
 
-        stage('Login to Azure') {
-            steps {
-                script {
-                    loginToAzure()
-                }
-            }
+        stage('Azure Login') {
+            steps { script { loginAzure() } }
         }
 
-        stage('Create Postgres Secret') {
-            steps {
-                script {
-                    createPostgresSecret()
-                }
-            }
+        stage('Create Secret') {
+            steps { script { createSecret() } }
         }
 
-        stage('Trivy Image Scan') {
-            steps {
-                script {
-                    runTrivyScan()
-                }
-            }
+        stage('Trivy Scan Postgres') {
+            steps { script { scanPostgres() } }
         }
 
         stage('Deploy PostgreSQL') {
-            steps {
-                script {
-                    deployPostgreSQL()
-                }
-            }
+            steps { script { deployPostgres() } }
         }
 
-        stage('Upload Security Reports') {
-            steps {
-                script {
-                    uploadSecurityReports()
-                }
-            }
+        stage('Upload Reports') {
+            steps { script { uploadReports() } }
         }
     }
 
     post {
         always {
-            archiveArtifacts artifacts: 'security-reports/**', fingerprint: true
+            archiveArtifacts artifacts: 'security-reports/**'
             cleanWs()
-        }
-
-        success {
-            echo "PostgreSQL deployed successfully!"
-        }
-
-        failure {
-            echo "Database pipeline failed!"
         }
     }
 }
 
-def loginToAzure() {
-    sh '''
+
+
+
+
+def loginAzure() {
+
+    sh """
     az login --service-principal \
-      -u $AZURE_CLIENT_ID \
-      -p $AZURE_CLIENT_SECRET \
-      --tenant $AZURE_TENANT_ID
+    -u $AZURE_CLIENT_ID \
+    -p $AZURE_CLIENT_SECRET \
+    --tenant $AZURE_TENANT_ID
 
     az account set --subscription $AZURE_SUBSCRIPTION_ID
-    '''
+    """
 }
 
-def createPostgresSecret() {
-    sh '''
+
+
+
+
+def createSecret() {
+
+    sh """
+
     az aks command invoke \
-      --resource-group $AKS_RESOURCE_GROUP \
-      --name $AKS_CLUSTER_NAME \
-      --command "
-        kubectl delete secret postgres-secret --ignore-not-found;
-        kubectl create secret generic postgres-secret \
-        --from-literal=POSTGRES_DB=$POSTGRES_DB \
-        --from-literal=POSTGRES_USER=$POSTGRES_USER \
-        --from-literal=POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-      "
-    '''
+    --resource-group $AKS_RESOURCE_GROUP \
+    --name $AKS_CLUSTER_NAME \
+    --command "
+
+    kubectl delete secret postgres-secret --ignore-not-found;
+
+    kubectl create secret generic postgres-secret \
+    --from-literal=POSTGRES_DB=$POSTGRES_DB \
+    --from-literal=POSTGRES_USER=$POSTGRES_USER \
+    --from-literal=POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+
+    "
+    """
 }
 
-def runTrivyScan() {
-    sh '''
+
+
+
+
+def scanPostgres() {
+
+    sh """
+
     docker pull postgres:15
 
-    mkdir -p ~/.cache/trivy
-    mkdir -p security-reports
-
     trivy image \
-      --cache-dir ~/.cache/trivy \
-      --severity HIGH,CRITICAL \
-      --no-progress \
-      --format table postgres:15 || true
+    --severity HIGH,CRITICAL \
+    --format json \
+    -o security-reports/trivy-postgres.json \
+    postgres:15
 
-    trivy image \
-      --cache-dir ~/.cache/trivy \
-      --severity HIGH,CRITICAL \
-      --no-progress \
-      --format json \
-      -o security-reports/trivy-report-database.json postgres:15 || true
-    '''
+    """
 }
 
-def deployPostgreSQL() {
-    sh '''
+
+
+
+
+def deployPostgres() {
+
+    sh """
+
     az aks command invoke \
-      --resource-group $AKS_RESOURCE_GROUP \
-      --name $AKS_CLUSTER_NAME \
-      --file kubernetes/postgres/postgres-deployment.yaml \
-      --file kubernetes/postgres/postgres-service.yaml \
-      --command "
-        kubectl apply -f postgres-deployment.yaml;
-        kubectl apply -f postgres-service.yaml;
-        kubectl rollout status deployment/postgres
-      "
-    '''
+    --resource-group $AKS_RESOURCE_GROUP \
+    --name $AKS_CLUSTER_NAME \
+    --file kubernetes/postgres/postgres-deployment.yaml \
+    --file kubernetes/postgres/postgres-service.yaml \
+    --command "
+
+    kubectl apply -f postgres-deployment.yaml;
+    kubectl apply -f postgres-service.yaml;
+
+    kubectl rollout status deployment/postgres
+
+    "
+    """
 }
 
-def uploadSecurityReports() {
-    sh '''
-    mkdir -p security-reports
 
-    cd security-reports
-    tar -czvf security-reports-database-latest.tar.gz trivy-report-database.json || true
-    cd ..
 
-    STORAGE_ACCOUNT_NAME=$(az storage account list \
-        --resource-group $AKS_RESOURCE_GROUP \
-        --query "[?contains(name, 'devsecopsrep')].name" \
-        -o tsv)
 
-    if [ -z "$STORAGE_ACCOUNT_NAME" ]; then
-        echo "Storage account not found"
-        exit 1
-    fi
 
-    az storage container create \
-      --name security-reports \
-      --account-name $STORAGE_ACCOUNT_NAME \
-      --auth-mode login || true
+def uploadReports() {
 
-    az storage blob upload \
-      --account-name $STORAGE_ACCOUNT_NAME \
-      --container-name security-reports \
-      --name database/latest/security-reports-database-latest.tar.gz \
-      --file security-reports/security-reports-database-latest.tar.gz \
-      --auth-mode login
-    '''
+    sh """
+
+    az storage blob upload-batch \
+    --account-name ${STORAGE_ACCOUNT} \
+    --destination security-reports/database \
+    --source security-reports \
+    --auth-mode login
+
+    """
 }

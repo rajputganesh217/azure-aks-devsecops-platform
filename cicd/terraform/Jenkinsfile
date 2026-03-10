@@ -1,278 +1,277 @@
-	
 pipeline {
-    agent any
+agent any
 
-    options {
-        disableConcurrentBuilds()
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        timestamps()
-        timeout(time: 1, unit: 'HOURS')
-    }
-
-    parameters {
-        choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat','prod'], description: 'Target deployment environment')
-        choice(name: 'ACTION', choices: ['plan','apply','destroy'], description: 'Terraform action')
-
-        string(name: 'TF_STATE_RG', defaultValue: 'aks-microservices-rg')
-        string(name: 'TF_STATE_SA', defaultValue: 'tfstatedevsecops01')
-        string(name: 'TF_STATE_CONTAINER', defaultValue: 'tfstate')
-    }
-
-    environment {
-
-        TF_ROOT = "infra/terraform"
-        TF_DIR  = "infra/terraform/env/core"
-        TF_PLAN = "tfplan-${params.ENVIRONMENT}.out"
-
-        PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
-
-        ARM_CLIENT_ID       = credentials('ARM_CLIENT_ID')
-        ARM_CLIENT_SECRET   = credentials('ARM_CLIENT_SECRET')
-        ARM_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
-        ARM_TENANT_ID       = credentials('AZURE_TENANT_ID')
-
-        AZURE_CLIENT_ID     = credentials('AZURE_CLIENT_ID')
-        AZURE_CLIENT_SECRET = credentials('AZURE_CLIENT_SECRET')
-
-        TF_VAR_postgres_db       = credentials('POSTGRES_DB')
-        TF_VAR_postgres_user     = credentials('POSTGRES_USER')
-        TF_VAR_postgres_password = credentials('POSTGRES_PASSWORD')
-        TF_VAR_db_host           = credentials('DB_HOST')
-    }
-
-    stages {
-
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Security Scans') {
-
-            parallel {
-
-                stage('Gitleaks') {
-                    steps {
-                        script { runSecretScan() }
-                    }
-                }
-
-                stage('Checkov') {
-                    steps {
-                        script { runInfrastructureScan() }
-                    }
-                }
-            }
-        }
-
-        stage('Terraform Init') {
-            steps {
-                script { runTerraformInit() }
-            }
-        }
-
-        stage('Terraform Format') {
-            steps {
-                script { runTerraformFmt() }
-            }
-        }
-
-        stage('Terraform Validate') {
-            steps {
-                script { runTerraformValidate() }
-            }
-        }
-
-        stage('Terraform Plan') {
-
-            when {
-                expression { params.ACTION != 'destroy' }
-            }
-
-            steps {
-                script { runTerraformPlan() }
-            }
-        }
-
-        stage('Approval Gate') {
-
-            when {
-                expression { params.ENVIRONMENT != 'dev' && params.ACTION == 'apply' }
-            }
-
-            steps {
-                input message: "Approve deployment to ${params.ENVIRONMENT}?"
-            }
-        }
-
-        stage('Terraform Apply') {
-
-            when {
-                expression { params.ACTION == 'apply' }
-            }
-
-            steps {
-                script { runTerraformApply() }
-            }
-        }
-
-        stage('Terraform Destroy') {
-
-            when {
-                expression { params.ACTION == 'destroy' }
-            }
-
-            steps {
-                input message: "Confirm infrastructure destruction for ${params.ENVIRONMENT}?"
-
-                script { runTerraformDestroy() }
-            }
-        }
-
-        stage('Upload Security Reports') {
-
-            steps {
-                script { uploadSecurityReportsToBlob() }
-            }
-        }
-    }
-
-    post {
-
-        always {
-
-            archiveArtifacts artifacts: 'security/reports/**/*.json, **/*.out',
-                             allowEmptyArchive: true,
-                             fingerprint: true
-
-            cleanWs()
-        }
-
-        success {
-            echo "Terraform pipeline completed successfully"
-        }
-
-        failure {
-            echo "Terraform pipeline failed"
-        }
-    }
+```
+options {
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '10'))
+    timestamps()
+    timeout(time: 1, unit: 'HOURS')
 }
 
-def runSecretScan() {
-
-    sh '''
-    DATE=$(date +%Y%m%d_%H%M%S)
-
-    mkdir -p security/reports/gitleaks
-
-    gitleaks detect \
-      --source . \
-      --config security/configs/gitleaks.toml \
-      --report-format json \
-      --report-path security/reports/gitleaks/gitleaks_$DATE.json \
-      || true
-    '''
+parameters {
+    choice(name: 'ENVIRONMENT', choices: ['dev','qa','test','uat','prod'], description: 'Target deployment environment')
+    choice(name: 'ACTION', choices: ['plan','apply','destroy'], description: 'Terraform action')
 }
 
-def runInfrastructureScan() {
+environment {
 
-    sh '''
-    DATE=$(date +%Y%m%d_%H%M%S)
+    TF_DIR = "infra/terraform/env/core"
+    CONF_DIR = "backend"
+    REPORTS_STORAGE = "devdevsecopsrepg0aa9"
 
-    mkdir -p security/reports/checkov
+    ARM_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
+    ARM_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
+    ARM_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
+    ARM_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-    checkov \
-      -d infra/terraform \
-      --config-file security/configs/checkov.yaml \
-      -o json \
-      > security/reports/checkov/checkov_$DATE.json \
-      || true
-    '''
+    TF_VAR_postgres_db       = credentials('POSTGRES_DB')
+    TF_VAR_postgres_user     = credentials('POSTGRES_USER')
+    TF_VAR_postgres_password = credentials('POSTGRES_PASSWORD')
 }
 
-def runTerraformInit() {
+stages {
 
-    dir("${env.TF_DIR}") {
+    stage('Prepare Workspace') {
+        steps {
+            script { prepareWorkspace() }
+        }
+    }
+
+    stage('Security Scans') {
+
+        parallel {
+
+            stage('Checkov Scan') {
+                steps { script { runCheckovScan() } }
+            }
+
+            stage('Gitleaks Scan') {
+                steps { script { runGitleaksScan() } }
+            }
+
+        }
+
+    }
+
+    stage('Terraform Init') {
+        steps { script { terraformInit() } }
+    }
+
+    stage('Terraform Quality Checks') {
+
+        parallel {
+
+            stage('Terraform Format') {
+                steps { script { terraformFmt() } }
+            }
+
+            stage('Terraform Validate') {
+                steps { script { terraformValidate() } }
+            }
+
+        }
+
+    }
+
+    stage('Terraform Plan') {
+
+        when {
+            expression { params.ACTION != 'destroy' }
+        }
+
+        steps { script { terraformPlan() } }
+    }
+
+    stage('Approval Gate') {
+
+        when {
+            expression { params.ENVIRONMENT != 'dev' && params.ACTION == 'apply' }
+        }
+
+        steps {
+            input message: "Approve deployment to ${params.ENVIRONMENT}?"
+        }
+    }
+
+    stage('Terraform Execute') {
+        steps { script { terraformExecute() } }
+    }
+
+    stage('Upload Security Reports') {
+        steps { script { uploadReports() } }
+    }
+
+}
+
+post {
+
+    always {
+
+        archiveArtifacts artifacts: 'security-reports/**/*.json, **/*.out',
+                         allowEmptyArchive: true,
+                         fingerprint: true
+
+        cleanWs()
+    }
+
+    success {
+        echo "Terraform pipeline completed successfully"
+    }
+
+    failure {
+        echo "Terraform pipeline failed"
+    }
+}
+```
+
+}
+
+def prepareWorkspace() {
+
+```
+env.COMMIT_ID = sh(
+    script: "git rev-parse --short=8 HEAD",
+    returnStdout: true
+).trim()
+
+sh '''
+rm -rf security-reports
+mkdir -p security-reports
+'''
+
+echo "Workspace ready for commit ${env.COMMIT_ID}"
+```
+
+}
+
+def runCheckovScan() {
+
+```
+sh """
+checkov -d ${env.TF_DIR} \
+  --framework terraform \
+  --quiet \
+  -o json \
+  > security-reports/checkov-${params.ENVIRONMENT}.json || true
+"""
+```
+
+}
+
+def runGitleaksScan() {
+
+```
+sh """
+gitleaks detect \
+  --source . \
+  --report-format json \
+  --report-path security-reports/gitleaks.json || true
+"""
+```
+
+}
+
+def terraformInit() {
+
+```
+dir("${env.TF_DIR}") {
+
+    sh """
+    terraform init \
+      -backend-config=${WORKSPACE}/${env.CONF_DIR}/${params.ENVIRONMENT}.conf \
+      -reconfigure
+    """
+}
+```
+
+}
+
+def terraformFmt() {
+
+```
+dir("${env.TF_DIR}") {
+
+    sh "terraform fmt -check || true"
+}
+```
+
+}
+
+def terraformValidate() {
+
+```
+dir("${env.TF_DIR}") {
+
+    sh "terraform validate"
+}
+```
+
+}
+
+def terraformPlan() {
+
+```
+dir("${env.TF_DIR}") {
+
+    sh """
+    terraform plan \
+      -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
+      -var='commit_id=${env.COMMIT_ID}' \
+      -out=tfplan-${params.ENVIRONMENT}.out
+    """
+}
+```
+
+}
+
+def terraformExecute() {
+
+```
+dir("${env.TF_DIR}") {
+
+    if (params.ACTION == 'apply') {
 
         sh """
-        terraform init -reconfigure \
-          -backend-config="resource_group_name=${params.TF_STATE_RG}" \
-          -backend-config="storage_account_name=${params.TF_STATE_SA}" \
-          -backend-config="container_name=${params.TF_STATE_CONTAINER}" \
-          -backend-config="key=${params.ENVIRONMENT}.terraform.tfstate"
+        terraform apply \
+          -auto-approve \
+          tfplan-${params.ENVIRONMENT}.out
+        """
+
+    }
+
+    else if (params.ACTION == 'destroy') {
+
+        sh """
+        terraform destroy \
+          -auto-approve \
+          -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
+          -var='commit_id=${env.COMMIT_ID}'
         """
     }
 }
+```
 
-def runTerraformFmt() {
-
-    dir("${env.TF_DIR}") {
-
-        sh "terraform fmt -check || true"
-    }
 }
 
-def runTerraformValidate() {
+def uploadReports() {
 
-    dir("${env.TF_DIR}") {
+```
+sh """
 
-        sh "terraform validate"
-    }
-}
+az login --service-principal \
+  -u $ARM_CLIENT_ID \
+  -p $ARM_CLIENT_SECRET \
+  --tenant $ARM_TENANT_ID
 
-def runTerraformPlan() {
+az account set --subscription $ARM_SUBSCRIPTION_ID
 
-    dir("${env.TF_DIR}") {
+az storage blob upload-batch \
+  --account-name ${REPORTS_STORAGE} \
+  --destination security-reports/terraform/${params.ENVIRONMENT}/${env.COMMIT_ID} \
+  --source security-reports \
+  --auth-mode login
+"""
+```
 
-        sh "terraform plan -var-file=tfvars/${params.ENVIRONMENT}.tfvars -out=${env.TF_PLAN}"
-    }
-}
-
-def runTerraformApply() {
-
-    dir("${env.TF_DIR}") {
-
-        sh "terraform apply -auto-approve ${env.TF_PLAN}"
-    }
-}
-
-def runTerraformDestroy() {
-
-    dir("${env.TF_DIR}") {
-
-        sh "terraform destroy -auto-approve -var-file=tfvars/${params.ENVIRONMENT}.tfvars"
-    }
-}
-
-def uploadSecurityReportsToBlob() {
-
-    dir("${env.TF_DIR}") {
-
-        try {
-
-            env.REPORTS_SA = sh(script: "terraform output -raw security_reports_storage_account", returnStdout: true).trim()
-            env.REPORTS_CONTAINER = sh(script: "terraform output -raw security_reports_container", returnStdout: true).trim()
-
-            sh '''
-            az login --service-principal \
-              -u $AZURE_CLIENT_ID \
-              -p $AZURE_CLIENT_SECRET \
-              --tenant $AZURE_TENANT_ID
-
-            az account set --subscription $AZURE_SUBSCRIPTION_ID
-
-            az storage blob upload-batch \
-              --account-name $REPORTS_SA \
-              --auth-mode login \
-              -d $REPORTS_CONTAINER \
-              -s ../../../../security/reports/ \
-              --pattern "**/*.json"
-            '''
-
-        } catch (Exception e) {
-
-            echo "Skipping report upload: ${e.message}"
-        }
-    }
 }

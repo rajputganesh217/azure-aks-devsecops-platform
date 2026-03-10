@@ -1,189 +1,250 @@
 def dockerImage
+def commitId
 
 pipeline {
+
     agent any
 
     environment {
-        APP_NAME          = "backend"
-        IMAGE_NAME        = "mydevopsacr123.azurecr.io/${APP_NAME}"
-        DOCKER_CREDS_ID   = "azure-acr-credentials"
+
+        APP_NAME = "backend"
+        APP_DIR  = "app/backend"
+
+        REGISTRY = "mydevopsacr123.azurecr.io"
+        IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
+
+        DOCKER_CREDS_ID = "azure-acr-credentials"
+
         SONAR_PROJECT_KEY = "backend-service"
         SONAR_SERVER_ID   = "sonarqube"
-        APP_DIR           = "app/backend"
+
+        STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
-        AKS_RESOURCE_GROUP    = "aks-microservices-rg"
-        AKS_CLUSTER_NAME      = "microservices-aks"
+
+        AKS_RESOURCE_GROUP = "aks-microservices-rg"
+        AKS_CLUSTER_NAME   = "microservices-aks"
 
         NVD_API_KEY = credentials('NVD_API_KEY')
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Prepare') {
             steps {
-                checkout scm
+                script {
+                    prepareWorkspace()
+                }
             }
         }
 
-        stage('Parallel Security Scans') {
+        stage('Security Scans') {
             parallel {
 
-                stage('Gitleaks Scan') {
+                stage('Gitleaks') {
                     steps {
-                        runGitleaksScan()
+                        script { runGitleaksScan() }
                     }
                 }
 
-                stage('SonarQube Scan') {
+                stage('SonarQube') {
                     steps {
-                        runSonarScan()
+                        script { runSonarScan() }
                     }
                 }
 
-                stage('OWASP Dependency Check') {
+                stage('Dependency Check') {
                     steps {
-                        runDependencyCheck()
+                        script { runDependencyCheck() }
                     }
                 }
+
             }
         }
 
-        stage('SonarQube Quality Gate') {
+        stage('Build Docker Image') {
             steps {
-                timeout(time: 30, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: false
-                }
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                buildDockerImage()
+                script { buildDockerImage() }
             }
         }
 
         stage('Trivy Image Scan') {
             steps {
-                runTrivyScan()
+                script { runTrivyScan() }
             }
         }
 
         stage('Push Image to ACR') {
             steps {
-                pushDockerImage()
+                script { pushDockerImage() }
             }
         }
 
         stage('Deploy to AKS') {
             steps {
-                deployToAks()
+                script { deployToAKS() }
             }
         }
 
         stage('Upload Security Reports') {
             steps {
-                uploadSecurityReports()
+                script { uploadSecurityReports() }
             }
         }
+
     }
 
     post {
+
         always {
             archiveArtifacts artifacts: 'security-reports/**', fingerprint: true
             cleanWs()
         }
 
         success {
-            echo "Backend deployed successfully!"
+            echo "Pipeline completed successfully."
         }
 
         failure {
-            echo "Pipeline failed. Check logs."
+            echo "Pipeline failed."
         }
     }
 }
 
-def runGitleaksScan() {
-    sh '''
+
+
+
+
+
+def prepareWorkspace() {
+
+    commitId = sh(
+        script: "git rev-parse --short=8 HEAD",
+        returnStdout: true
+    ).trim()
+
+    sh """
     mkdir -p security-reports
+    echo "Commit ID: ${commitId}"
+    """
+}
+
+
+
+
+
+
+def runGitleaksScan() {
+
+    sh """
     gitleaks detect \
       --source . \
       --config security/configs/gitleaks.toml \
       --report-format json \
-      --report-path security-reports/gitleaks-report.json || true
-    '''
-}
-
-def runSonarScan() {
-    dir("${env.APP_DIR}") {
-        withSonarQubeEnv("${env.SONAR_SERVER_ID}") {
-            sh """
-            /opt/sonar-scanner/bin/sonar-scanner \
-              -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} \
-              -Dsonar.sources=. \
-              -Dsonar.python.version=3 \
-              -Dsonar.ws.timeout=600
-            """
-        }
-    }
-}
-
-def runDependencyCheck() {
-    dir("${env.APP_DIR}") {
-        sh """
-        mkdir -p /var/lib/jenkins/dependency-check-data || true
-
-        /opt/dependency-check/bin/dependency-check.sh \
-          --project "${APP_NAME}" \
-          --scan . \
-          --format XML \
-          --data /var/lib/jenkins/dependency-check-data \
-          --out dependency-check-report.xml \
-          --nvdApiKey ${env.NVD_API_KEY} \
-          --nvdApiDelay 5000 || true
-        """
-
-        dependencyCheckPublisher pattern: 'dependency-check-report.xml'
-    }
-}
-
-def buildDockerImage() {
-    dockerImage = docker.build(
-        "${env.IMAGE_NAME}:${env.BUILD_NUMBER}",
-        "-f docker/${env.APP_NAME}/Dockerfile ."
-    )
-}
-
-def runTrivyScan() {
-    sh """
-    mkdir -p security-reports
-
-    trivy image \
-      --severity HIGH,CRITICAL \
-      --exit-code 0 \
-      --no-progress \
-      --format table \
-      ${env.IMAGE_NAME}:${env.BUILD_NUMBER} \
-      > security-reports/trivy-report.txt || true
+      --report-path security-reports/gitleaks-${APP_NAME}.json || true
     """
 }
 
-def pushDockerImage() {
-    docker.withRegistry(
-        "https://mydevopsacr123.azurecr.io",
-        "${env.DOCKER_CREDS_ID}"
-    ) {
-        dockerImage.push()
-        dockerImage.push("latest")
+
+
+
+
+
+def runSonarScan() {
+
+    dir("${APP_DIR}") {
+
+        withSonarQubeEnv("${SONAR_SERVER_ID}") {
+
+            sh """
+            /opt/sonar-scanner/bin/sonar-scanner \
+              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+              -Dsonar.sources=. \
+              -Dsonar.ws.timeout=600
+            """
+
+        }
+
     }
 }
 
-def deployToAks() {
-    sh '''
+
+
+
+
+
+def runDependencyCheck() {
+
+    dir("${APP_DIR}") {
+
+        sh """
+        /opt/dependency-check/bin/dependency-check.sh \
+          --project ${APP_NAME} \
+          --scan . \
+          --format JSON \
+          --out ../../security-reports \
+          --nvdApiKey ${NVD_API_KEY} \
+          --nvdApiDelay 5000 || true
+        """
+    }
+}
+
+
+
+
+
+
+def buildDockerImage() {
+
+    dockerImage = docker.build(
+        "${IMAGE_NAME}:${APP_NAME}-${commitId}",
+        "-f docker/${APP_NAME}/Dockerfile ."
+    )
+}
+
+
+
+
+
+
+def runTrivyScan() {
+
+    sh """
+    trivy image \
+      --severity HIGH,CRITICAL \
+      --format json \
+      -o security-reports/trivy-${APP_NAME}.json \
+      ${IMAGE_NAME}:${APP_NAME}-${commitId}
+    """
+}
+
+
+
+
+
+
+def pushDockerImage() {
+
+    docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
+
+        dockerImage.push("${APP_NAME}-${commitId}")
+        dockerImage.push("latest")
+
+    }
+}
+
+
+
+
+
+
+def deployToAKS() {
+
+    sh """
+
     az login --service-principal \
       -u $AZURE_CLIENT_ID \
       -p $AZURE_CLIENT_SECRET \
@@ -197,18 +258,33 @@ def deployToAks() {
       --file kubernetes/backend/backend-deployment.yaml \
       --file kubernetes/backend/backend-service.yaml \
       --command "
-        kubectl apply -f backend-deployment.yaml;
-        kubectl apply -f backend-service.yaml;
-        kubectl set image deployment/shoe-backend backend=${IMAGE_NAME}:${BUILD_NUMBER};
-        kubectl rollout status deployment/shoe-backend
+
+      kubectl apply -f backend-deployment.yaml;
+      kubectl apply -f backend-service.yaml;
+
+      kubectl set image deployment/shoe-backend \
+      backend=${IMAGE_NAME}:${APP_NAME}-${commitId};
+
+      kubectl rollout status deployment/shoe-backend
+
       "
-    '''
+    """
 }
 
-def uploadSecurityReports() {
-    sh '''
-    mkdir -p security-reports
 
-    tar -czvf security-reports/security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz security-reports/* || true
-    '''
+
+
+
+
+def uploadSecurityReports() {
+
+    sh """
+
+    az storage blob upload-batch \
+      --account-name ${STORAGE_ACCOUNT} \
+      --destination security-reports/${APP_NAME} \
+      --source security-reports \
+      --auth-mode login
+
+    """
 }

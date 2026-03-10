@@ -1,6 +1,8 @@
 def dockerImage
+def commitId
 
 pipeline {
+
     agent any
 
     parameters {
@@ -15,8 +17,10 @@ pipeline {
         ENV_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : '-' + params.ENVIRONMENT}"
         ACR_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : params.ENVIRONMENT}"
 
-        IMAGE_NAME   = "mydevopsacr${ACR_SUFFIX}123.azurecr.io/${APP_NAME}"
-        REGISTRY_URL = "https://mydevopsacr${ACR_SUFFIX}123.azurecr.io"
+        REGISTRY = "mydevopsacr${ACR_SUFFIX}123.azurecr.io"
+        IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
+
+        STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
 
         DOCKER_CREDS_ID = "azure-acr-credentials"
 
@@ -36,201 +40,207 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Wait for SonarQube') {
-            steps {
-                sh '''
-                echo "Waiting for SonarQube..."
-                until curl -s http://localhost:9000/api/system/status | grep -q '"status":"UP"'; do
-                  sleep 5
-                done
-                '''
-            }
+        stage('Prepare') {
+            steps { script { prepareWorkspace() } }
         }
 
         stage('Security Scans') {
-
             parallel {
 
-                stage('Gitleaks Scan') {
-                    steps {
-                        sh '''
-                        mkdir -p security-reports
+                stage('Gitleaks') { steps { script { runGitleaksScan() } } }
 
-                        gitleaks detect \
-                          --source . \
-                          --config security/configs/gitleaks.toml \
-                          --report-format json \
-                          --report-path security-reports/gitleaks-report.json || true
-                        '''
-                    }
-                }
+                stage('SonarQube') { steps { script { runSonarScan() } } }
 
-                stage('SonarQube Scan') {
-                    steps {
+                stage('Dependency Check') { steps { script { runDependencyCheck() } } }
 
-                        dir("${APP_DIR}") {
-
-                            withSonarQubeEnv("${SONAR_SERVER_ID}") {
-
-                                sh '''
-                                node -v || true
-
-                                /opt/sonar-scanner/bin/sonar-scanner \
-                                  -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                                  -Dsonar.sources=. \
-                                  -Dsonar.ws.timeout=600
-                                '''
-                            }
-                        }
-                    }
-                }
-
-                stage('OWASP Dependency Check') {
-
-                    steps {
-
-                        dir("${APP_DIR}") {
-
-                            sh '''
-                            mkdir -p /var/lib/jenkins/dependency-check-data || true
-
-                            /opt/dependency-check/bin/dependency-check.sh \
-                              --project "${APP_NAME}" \
-                              --scan . \
-                              --format XML \
-                              --data /var/lib/jenkins/dependency-check-data \
-                              --out dependency-check-report.xml \
-                              --nvdApiKey $NVD_API_KEY \
-                              --nvdApiDelay 5000 || true
-                            '''
-
-                            dependencyCheckPublisher pattern: 'dependency-check-report.xml'
-                        }
-                    }
-                }
             }
         }
-
-    //    stage('Sonar Quality Gate') {
-      //      steps {
-        //        script {
-          //          timeout(time: 10, unit: 'MINUTES') {
-            //            def qg = waitForQualityGate abortPipeline: false
-              //          echo "Quality Gate Result: ${qg.status}"
-     //               }
-       //         }
-         //   }
-        // }
 
         stage('Docker Build') {
-
-            steps {
-
-                script {
-
-                    dockerImage = docker.build(
-                        "${IMAGE_NAME}:${BUILD_NUMBER}",
-                        "-f docker/${APP_NAME}/Dockerfile ."
-                    )
-                }
-            }
+            steps { script { buildDockerImage() } }
         }
 
-        stage('Trivy Image Scan') {
-
-            steps {
-
-                sh '''
-                mkdir -p security-reports
-
-                trivy image \
-                  --severity HIGH,CRITICAL \
-                  --exit-code 0 \
-                  --no-progress \
-                  --format table \
-                  ${IMAGE_NAME}:${BUILD_NUMBER} \
-                  > security-reports/trivy-report.txt || true
-                '''
-            }
+        stage('Trivy Scan') {
+            steps { script { runTrivyScan() } }
         }
 
-        stage('Push Image to ACR') {
-
-            steps {
-
-                script {
-
-                    docker.withRegistry("${REGISTRY_URL}", "${DOCKER_CREDS_ID}") {
-
-                        dockerImage.push()
-                        dockerImage.push("latest")
-                    }
-                }
-            }
+        stage('Push Image') {
+            steps { script { pushDockerImage() } }
         }
 
         stage('Deploy to AKS') {
-
-            steps {
-
-                sh '''
-                az login --service-principal \
-                  -u $AZURE_CLIENT_ID \
-                  -p $AZURE_CLIENT_SECRET \
-                  --tenant $AZURE_TENANT_ID
-
-                az account set --subscription $AZURE_SUBSCRIPTION_ID
-
-                az aks command invoke \
-                  --resource-group $AKS_RESOURCE_GROUP \
-                  --name $AKS_CLUSTER_NAME \
-                  --file kubernetes/frontend/deployment.yaml \
-                  --file kubernetes/frontend/service.yaml \
-                  --file kubernetes/frontend/ingress.yaml \
-                  --command "
-                    kubectl apply -f deployment.yaml;
-                    kubectl apply -f service.yaml;
-                    kubectl apply -f ingress.yaml;
-                    kubectl set image deployment/shoe-frontend frontend=${IMAGE_NAME}:${BUILD_NUMBER};
-                    kubectl rollout status deployment/shoe-frontend
-                  "
-                '''
-            }
+            steps { script { deployFrontend() } }
         }
 
-        stage('Upload Security Reports') {
-
-            steps {
-
-                sh '''
-                tar -czvf security-reports/security-reports-${APP_NAME}-b${BUILD_NUMBER}.tar.gz security-reports/* || true
-                '''
-            }
+        stage('Upload Reports') {
+            steps { script { uploadSecurityReports() } }
         }
     }
 
     post {
-
         always {
-
             archiveArtifacts artifacts: 'security-reports/**', fingerprint: true
             cleanWs()
         }
+    }
+}
 
-        success {
 
-            echo "Frontend deployment successful!"
-        }
 
-        failure {
 
-            echo "Frontend pipeline failed!"
+
+def prepareWorkspace() {
+
+    commitId = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
+
+    sh "mkdir -p security-reports"
+}
+
+
+
+
+
+def runGitleaksScan() {
+
+    sh """
+    gitleaks detect \
+    --source . \
+    --config security/configs/gitleaks.toml \
+    --report-format json \
+    --report-path security-reports/gitleaks-${APP_NAME}.json || true
+    """
+}
+
+
+
+
+
+def runSonarScan() {
+
+    dir("${APP_DIR}") {
+
+        withSonarQubeEnv("${SONAR_SERVER_ID}") {
+
+            sh """
+            /opt/sonar-scanner/bin/sonar-scanner \
+            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+            -Dsonar.sources=. \
+            -Dsonar.ws.timeout=600
+            """
         }
     }
+}
+
+
+
+
+
+def runDependencyCheck() {
+
+    dir("${APP_DIR}") {
+
+        sh """
+        /opt/dependency-check/bin/dependency-check.sh \
+        --project ${APP_NAME} \
+        --scan . \
+        --format JSON \
+        --out ../../security-reports \
+        --nvdApiKey ${NVD_API_KEY} \
+        --nvdApiDelay 5000 || true
+        """
+    }
+}
+
+
+
+
+
+def buildDockerImage() {
+
+    dockerImage = docker.build(
+        "${IMAGE_NAME}:${APP_NAME}-${commitId}",
+        "-f docker/frontend/Dockerfile ."
+    )
+}
+
+
+
+
+
+def runTrivyScan() {
+
+    sh """
+    trivy image \
+    --severity HIGH,CRITICAL \
+    --format json \
+    -o security-reports/trivy-${APP_NAME}.json \
+    ${IMAGE_NAME}:${APP_NAME}-${commitId}
+    """
+}
+
+
+
+
+
+def pushDockerImage() {
+
+    docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
+
+        dockerImage.push("${APP_NAME}-${commitId}")
+        dockerImage.push("latest")
+
+    }
+}
+
+
+
+
+
+def deployFrontend() {
+
+    sh """
+
+    az login --service-principal \
+    -u $AZURE_CLIENT_ID \
+    -p $AZURE_CLIENT_SECRET \
+    --tenant $AZURE_TENANT_ID
+
+    az account set --subscription $AZURE_SUBSCRIPTION_ID
+
+    az aks command invoke \
+    --resource-group $AKS_RESOURCE_GROUP \
+    --name $AKS_CLUSTER_NAME \
+    --file kubernetes/frontend/deployment.yaml \
+    --file kubernetes/frontend/service.yaml \
+    --file kubernetes/frontend/ingress.yaml \
+    --command "
+
+    kubectl apply -f deployment.yaml;
+    kubectl apply -f service.yaml;
+    kubectl apply -f ingress.yaml;
+
+    kubectl set image deployment/shoe-frontend \
+    frontend=${IMAGE_NAME}:${APP_NAME}-${commitId};
+
+    kubectl rollout status deployment/shoe-frontend
+
+    "
+    """
+}
+
+
+
+
+
+def uploadSecurityReports() {
+
+    sh """
+
+    az storage blob upload-batch \
+    --account-name ${STORAGE_ACCOUNT} \
+    --destination security-reports/${APP_NAME} \
+    --source security-reports \
+    --auth-mode login
+
+    """
 }
