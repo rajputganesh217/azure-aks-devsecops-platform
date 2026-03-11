@@ -1,15 +1,13 @@
 def dockerImage
 
 pipeline {
-
     agent any
 
     parameters {
-        choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat','prod'], description: 'Target Environment')
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'qa', 'uat', 'prod'], description: 'Target Environment')
     }
 
     environment {
-
         APP_NAME = "worker"
         APP_DIR  = "app/worker"
 
@@ -24,6 +22,7 @@ pipeline {
         SONAR_PROJECT_KEY = "worker-service"
         SONAR_SERVER_ID   = "sonarqube"
 
+        // Ensure this matches the storage account created by your current Terraform state
         STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
@@ -38,7 +37,6 @@ pipeline {
     }
 
     stages {
-
         stage('Prepare') {
             steps {
                 script {
@@ -48,21 +46,13 @@ pipeline {
         }
 
         stage('Security Scans') {
-
             parallel {
-
                 stage('Gitleaks Scan') {
                     steps { script { runGitleaksScan() } }
                 }
-
-              //  stage('SonarQube Scan') {
-                //    steps { script { runSonarScan() } }
-               // }
-
                 stage('Dependency Check') {
                     steps { script { runDependencyCheck() } }
                 }
-
             }
         }
 
@@ -113,43 +103,28 @@ pipeline {
                 }
             }
         }
-
     }
 
     post {
-
         always {
             archiveArtifacts artifacts: 'security-reports/**', allowEmptyArchive: true
             cleanWs()
         }
-
         success {
             echo "Worker deployment successful!"
         }
-
         failure {
             echo "Worker pipeline failed!"
         }
     }
 }
 
-
-
-
-
-
 def prepareWorkspace() {
     env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
     sh "rm -rf security-reports && mkdir -p security-reports"
 }
 
-
-
-
-
-
 def runGitleaksScan() {
-
     sh """
     gitleaks detect \
       --source . \
@@ -159,39 +134,8 @@ def runGitleaksScan() {
     """
 }
 
-
-
-
-
-
-def runSonarScan() {
-
-    dir("${APP_DIR}") {
-
-        withSonarQubeEnv("${SONAR_SERVER_ID}") {
-
-            sh """
-            /opt/sonar-scanner/bin/sonar-scanner \
-              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-              -Dsonar.sources=. \
-              -Dsonar.python.version=3 \
-              -Dsonar.ws.timeout=600
-            """
-
-        }
-
-    }
-}
-
-
-
-
-
-
 def runDependencyCheck() {
-
     dir("${APP_DIR}") {
-
         sh """
         /opt/dependency-check/bin/dependency-check.sh \
           --project ${APP_NAME} \
@@ -204,19 +148,9 @@ def runDependencyCheck() {
     }
 }
 
-
-
-
-
-
 def buildDockerImage() {
     sh "docker build -t ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID} -f docker/worker/Dockerfile ."
 }
-
-
-
-
-
 
 def runTrivyScan() {
     sh """
@@ -228,26 +162,15 @@ def runTrivyScan() {
     """
 }
 
-
-
-
-
-
 def pushDockerImage() {
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
         sh "docker push ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID}"
     }
 }
 
-
-
-
-
-
 def deployWorker() {
-
+    // FIX: Removed the nested 'sh' block and cleaned up the 'az' commands
     sh """
-
     az login --service-principal \
       -u $AZURE_CLIENT_ID \
       -p $AZURE_CLIENT_SECRET \
@@ -255,37 +178,24 @@ def deployWorker() {
 
     az account set --subscription $AZURE_SUBSCRIPTION_ID
 
-    sh """
-        # Dynamically update the image tag in the deployment manifest
-        sed -i "s|image:.*|image: ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID}|g" kubernetes/worker/worker-deployment.yaml
-    """
+    # Use | as sed delimiter because IMAGE_NAME contains forward slashes
+    sed -i "s|image:.*|image: ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID}|g" kubernetes/worker/worker-deployment.yaml
 
     az aks command invoke \
       --resource-group $AKS_RESOURCE_GROUP \
       --name $AKS_CLUSTER_NAME \
       --file kubernetes/worker/worker-deployment.yaml \
-      --command "
-        kubectl apply -f worker-deployment.yaml;
-        kubectl rollout status deployment/worker --timeout=300s
-      " || true
+      --command "kubectl apply -f worker-deployment.yaml && kubectl rollout status deployment/worker --timeout=300s"
     """
 }
 
-
-
-
-
-
 def uploadSecurityReports() {
-
     sh """
-
     az storage blob upload-batch \
       --account-name ${STORAGE_ACCOUNT} \
       --destination security-reports \
       --destination-path ${APP_NAME}/${env.COMMIT_ID} \
       --source security-reports \
       --auth-mode login
-
     """
 }
