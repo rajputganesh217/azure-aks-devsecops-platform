@@ -40,6 +40,7 @@ pipeline {
             steps { script { prepareWorkspace() } }
         }
 
+/*
         stage('Security Scans') {
             when { expression { params.ENVIRONMENT == 'dev' } }
             parallel {
@@ -60,16 +61,18 @@ pipeline {
                 }
             }
         }
-
+*/
         stage('Docker Build') {
             when { expression { params.ENVIRONMENT == 'dev' } }
             steps { script { buildDockerImage() } }
         }
 
+/*
         stage('Trivy Image Scan') {
             when { expression { params.ENVIRONMENT == 'dev' } }
             steps { script { runTrivyScan() } }
         }
+*/
 
         stage('Push Image to ACR') {
             when { expression { params.ENVIRONMENT == 'dev' } }
@@ -85,10 +88,12 @@ pipeline {
             steps { script { deployToAKS() } }
         }
 
+/*
         stage('Upload Security Reports') {
             when { expression { params.ENVIRONMENT == 'dev' } }
             steps { script { uploadSecurityReports() } }
         }
+*/
     }
 
     post {

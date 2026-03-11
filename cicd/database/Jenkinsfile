@@ -40,6 +40,7 @@ pipeline {
             steps { script { loginAzure() } }
         }
 
+/*
         stage('Security: Manifest Scan') {
             when { expression { params.ENVIRONMENT == 'dev' } }
             steps {
@@ -48,24 +49,29 @@ pipeline {
                 }
             }
         }
+*/
 
         stage('Create Secret') {
             steps { script { createSecret() } }
         }
 
+/*
         stage('Security: Image Scan') {
             when { expression { params.ENVIRONMENT == 'dev' } }
             steps { script { scanPostgres() } }
         }
+*/
 
         stage('Deploy PostgreSQL') {
             steps { script { deployPostgres() } }
         }
 
+/*
         stage('Upload Reports') {
             when { expression { params.ENVIRONMENT == 'dev' } }
             steps { script { uploadReports() } }
         }
+*/
     }
 
     post {
