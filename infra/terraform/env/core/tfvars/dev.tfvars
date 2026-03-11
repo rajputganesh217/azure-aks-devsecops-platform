@@ -1,12 +1,12 @@
 
 resource_group_name = "aks-microservices-rg"
-location            = "canadacentral"
+location            = "eastus"
 
 aks_name   = "microservices-aks"
 dns_prefix = "microaks"
 
 node_count = 1
-vm_size    = "standard_b2s_v2"
+vm_size    = "Standard_B2s"
 
 acr_name = "mydevopsacr123"
 
@@ -30,5 +30,5 @@ db_subnets = {
   "subnet-private-db-az3" = "10.1.22.0/24"
 }
 
-jump_server_vm_size = "standard_b1s_v2"
+jump_server_vm_size = "Standard_B1s"
 jump_admin_username = "ganesh"
