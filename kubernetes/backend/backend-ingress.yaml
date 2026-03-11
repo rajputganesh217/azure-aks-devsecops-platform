@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shoe-backend-ingress
+  annotations:
+    appgw.ingress.kubernetes.io/backend-protocol: "http"
+spec:
+  ingressClassName: azure-application-gateway
+  rules:
+  - host: api-dev.microservices.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: shoe-backend
+            port:
+              number: 5000

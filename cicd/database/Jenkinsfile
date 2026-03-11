@@ -18,6 +18,9 @@ pipeline {
         AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
         AKS_CLUSTER_NAME   = "microservices-aks"
 
+        JUMP_SERVER_IP = credentials('JUMP_SERVER_IP')
+        JUMP_USER      = "ganesh"
+
         POSTGRES_USER      = credentials('POSTGRES_USER')
         POSTGRES_PASSWORD  = credentials('POSTGRES_PASSWORD')
         POSTGRES_DB        = credentials('POSTGRES_DB')
@@ -87,19 +90,18 @@ def loginAzure() {
 }
 
 def createSecret() {
-    sh """
-        # Create namespace if it doesn't exist
-        az aks command invoke \
-          --resource-group ${AKS_RESOURCE_GROUP} \
-          --name ${AKS_CLUSTER_NAME} \
-          --command "kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -"
-
-        # Create the secret
-        az aks command invoke \
-          --resource-group ${AKS_RESOURCE_GROUP} \
-          --name ${AKS_CLUSTER_NAME} \
-          --command "kubectl delete secret postgres-secret -n ${NAMESPACE} --ignore-not-found && kubectl create secret generic postgres-secret -n ${NAMESPACE} --from-literal=POSTGRES_DB=${POSTGRES_DB} --from-literal=POSTGRES_USER=${POSTGRES_USER} --from-literal=POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
-    """
+    withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
+        sh """
+        ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
+            kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+            kubectl delete secret postgres-secret -n ${NAMESPACE} --ignore-not-found
+            kubectl create secret generic postgres-secret -n ${NAMESPACE} \\
+              --from-literal=POSTGRES_DB=${POSTGRES_DB} \\
+              --from-literal=POSTGRES_USER=${POSTGRES_USER} \\
+              --from-literal=POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        "
+        """
+    }
 }
 
 def scanPostgres() {
@@ -114,17 +116,21 @@ def scanPostgres() {
 }
 
 def deployPostgres() {
-    sh """
-        # Deploy all manifests in the directory
-        az aks command invoke \
-          --resource-group ${AKS_RESOURCE_GROUP} \
-          --name ${AKS_CLUSTER_NAME} \
-          --command "kubectl apply -f . -n ${NAMESPACE}" \
-          --file ${K8S_DIR}/configmap.yaml \
-          --file ${K8S_DIR}/deployment.yaml \
-          --file ${K8S_DIR}/pvc.yaml \
-          --file ${K8S_DIR}/service.yaml
-    """
+    def remoteDir = "/tmp/k8s-postgres-${env.BUILD_NUMBER}"
+
+    withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
+        sh """
+        ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
+        scp -o StrictHostKeyChecking=no -i \${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
+
+        ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
+            kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+            kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
+            kubectl rollout status deployment/postgres -n ${NAMESPACE} --timeout=300s
+            rm -rf ${remoteDir}
+        "
+        """
+    }
 }
 
 def uploadReports() {
