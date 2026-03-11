@@ -15,9 +15,6 @@ pipeline {
         APP_NAME = "backend"
         APP_DIR  = "app/backend"
 
-        REGISTRY = "mydevopsacr123.azurecr.io"
-        IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
-
         DOCKER_CREDS_ID = "azure-acr-credentials"
 
         SONAR_PROJECT_KEY = "backend-service"
