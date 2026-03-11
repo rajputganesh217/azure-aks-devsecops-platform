@@ -34,7 +34,11 @@ pipeline {
 
     stages {
         stage('Prepare') {
-            steps { script { prepareWorkspace() } }
+            steps { 
+                script { 
+                    prepareWorkspace() 
+                } 
+            }
         }
 
         stage('Security Scans') {
@@ -51,29 +55,49 @@ pipeline {
         stage('Security: Manifest Scan') {
             steps {
                 script {
-                    sh "docker run --rm -v \$(pwd):/project zegl/kube-score:latest score kubernetes/frontend/*.yaml > security-reports/kube-score-frontend.txt || true"
+                    sh "docker run --rm -v \$(pwd):/project zegl/kube-score:latest score kubernetes/frontend/deployment.yaml kubernetes/frontend/ingress.yaml kubernetes/frontend/service.yaml > security-reports/kube-score-frontend.txt || true"
                 }
             }
         }
 
         stage('Docker Build') {
-            steps { script { buildDockerImage() } }
+            steps { 
+                script { 
+                    buildDockerImage() 
+                } 
+            }
         }
 
         stage('Trivy Image Scan') {
-            steps { script { runTrivyScan() } }
+            steps { 
+                script { 
+                    runTrivyScan() 
+                } 
+            }
         }
 
         stage('Push Image to ACR') {
-            steps { script { pushDockerImage() } }
+            steps { 
+                script { 
+                    pushDockerImage() 
+                } 
+            }
         }
 
         stage('Deploy to AKS') {
-            steps { script { deployFrontend() } }
+            steps { 
+                script { 
+                    deployFrontend() 
+                } 
+            }
         }
 
         stage('Upload Security Reports') {
-            steps { script { uploadSecurityReports() } }
+            steps { 
+                script { 
+                    uploadSecurityReports() 
+                } 
+            }
         }
     }
 
@@ -94,10 +118,12 @@ pipeline {
 // --- Logic Functions ---
 
 def prepareWorkspace() {
-    env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
+    // Correctly define COMMIT_ID to avoid the 'WorkflowScript' field error
+    def commitId = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
+    env.COMMIT_ID = commitId
+    
     sh "rm -rf security-reports && mkdir -p security-reports"
     
-    // Log in once at the start
     sh """
         az login --service-principal -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID}
         az account set --subscription ${AZURE_SUBSCRIPTION_ID}
@@ -133,12 +159,12 @@ def pushDockerImage() {
 }
 
 def deployFrontend() {
-    // FIX: Combined shell logic to avoid nested blocks and used | delimiter for sed
     sh """
-        # Update image tag
+        # Update the image tag in the manifest using | as delimiter
         sed -i "s|image:.*|image: ${IMAGE_NAME}:frontend-${env.COMMIT_ID}|g" kubernetes/frontend/deployment.yaml
 
-        # Invoke all frontend manifests at once
+        # Fix: Entire kubectl command string is inside double quotes for 'az aks command invoke'
+        # This ensures the logic (&&) is executed inside AKS, not locally on Jenkins
         az aks command invoke \
           --resource-group ${AKS_RESOURCE_GROUP} \
           --name ${AKS_CLUSTER_NAME} \
