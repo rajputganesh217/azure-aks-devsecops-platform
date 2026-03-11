@@ -67,6 +67,14 @@ pipeline {
             }
         }
 
+        stage('Security: Manifest Scan') {
+            steps {
+                script {
+                    sh "docker run --rm -v \$(pwd):/project zegl/kube-score:latest score kubernetes/worker/*.yaml > security-reports/kube-score-worker.txt || true"
+                }
+            }
+        }
+
         stage('Docker Build') {
             steps {
                 script {
