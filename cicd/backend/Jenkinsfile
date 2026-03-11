@@ -1,24 +1,20 @@
 def dockerImage
 
 pipeline {
-
     agent any
     
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat','prod'], description: 'Target Environment')
     }
 
-
     environment {
-
         APP_NAME = "backend"
         APP_DIR  = "app/backend"
-
         DOCKER_CREDS_ID = "azure-acr-credentials"
-
         SONAR_PROJECT_KEY = "backend-service"
         SONAR_SERVER_ID   = "sonarqube"
-
+        
+        // Ensure this matches your current terraform-generated storage account
         STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
 
         ENV_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : '-' + params.ENVIRONMENT}"
@@ -39,7 +35,6 @@ pipeline {
     }
 
     stages {
-
         stage('Prepare') {
             steps {
                 script {
@@ -50,25 +45,16 @@ pipeline {
 
         stage('Security Scans') {
             parallel {
-
                 stage('Gitleaks') {
                     steps {
                         script { runGitleaksScan() }
                     }
                 }
-
-                // stage('SonarQube') {
-                //     steps {
-                //         script { runSonarScan() }
-                //     }
-                // }
-
                 stage('Dependency Check') {
                     steps {
                         script { runDependencyCheck() }
                     }
                 }
-
             }
         }
 
@@ -109,43 +95,28 @@ pipeline {
                 script { uploadSecurityReports() }
             }
         }
-
     }
 
     post {
-
         always {
             archiveArtifacts artifacts: 'security-reports/**', allowEmptyArchive: true
             cleanWs()
         }
-
         success {
             echo "Pipeline completed successfully."
         }
-
         failure {
             echo "Pipeline failed."
         }
     }
 }
 
-
-
-
-
-
 def prepareWorkspace() {
     env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
     sh "rm -rf security-reports && mkdir -p security-reports"
 }
 
-
-
-
-
-
 def runGitleaksScan() {
-
     sh """
     gitleaks detect \
       --source . \
@@ -155,38 +126,8 @@ def runGitleaksScan() {
     """
 }
 
-
-
-
-
-
-def runSonarScan() {
-
-    dir("${APP_DIR}") {
-
-        withSonarQubeEnv("${SONAR_SERVER_ID}") {
-
-            sh """
-            /opt/sonar-scanner/bin/sonar-scanner \
-              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-              -Dsonar.sources=. \
-              -Dsonar.ws.timeout=600
-            """
-
-        }
-
-    }
-}
-
-
-
-
-
-
 def runDependencyCheck() {
-
     dir("${APP_DIR}") {
-
         sh """
         /opt/dependency-check/bin/dependency-check.sh \
           --project ${APP_NAME} \
@@ -199,19 +140,9 @@ def runDependencyCheck() {
     }
 }
 
-
-
-
-
-
 def buildDockerImage() {
     sh "docker build -t ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID} -f docker/${APP_NAME}/Dockerfile ."
 }
-
-
-
-
-
 
 def runTrivyScan() {
     sh """
@@ -223,26 +154,15 @@ def runTrivyScan() {
     """
 }
 
-
-
-
-
-
 def pushDockerImage() {
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
         sh "docker push ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID}"
     }
 }
 
-
-
-
-
-
 def deployToAKS() {
-
+    // FIX: Combined the redundant sh blocks and fixed the triple-quote nesting
     sh """
-
     az login --service-principal \
       -u $AZURE_CLIENT_ID \
       -p $AZURE_CLIENT_SECRET \
@@ -250,39 +170,25 @@ def deployToAKS() {
 
     az account set --subscription $AZURE_SUBSCRIPTION_ID
 
-    sh """
-    
-        sed -i "s|image:.*|image: ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID}|g" kubernetes/backend/backend-deployment.yaml
-    """
+    # Use | as delimiter in sed to avoid issues with / in the registry URL
+    sed -i "s|image:.*|image: ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID}|g" kubernetes/backend/backend-deployment.yaml
 
     az aks command invoke \
       --resource-group $AKS_RESOURCE_GROUP \
       --name $AKS_CLUSTER_NAME \
       --file kubernetes/backend/backend-deployment.yaml \
       --file kubernetes/backend/backend-service.yaml \
-      --command "
-        kubectl apply -f backend-deployment.yaml;
-        kubectl apply -f backend-service.yaml;
-        kubectl rollout status deployment/shoe-backend --timeout=300s
-      " || true
+      --command "kubectl apply -f backend-deployment.yaml && kubectl apply -f backend-service.yaml"
     """
 }
 
-
-
-
-
-
 def uploadSecurityReports() {
-
     sh """
-
     az storage blob upload-batch \
       --account-name ${STORAGE_ACCOUNT} \
       --destination security-reports \
       --destination-path ${APP_NAME}/${env.COMMIT_ID} \
       --source security-reports \
       --auth-mode login
-
     """
 }
