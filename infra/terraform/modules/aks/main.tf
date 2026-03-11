@@ -57,18 +57,4 @@ resource "azurerm_kubernetes_cluster" "aks" {
   tags = merge(var.tags, {
     Name = var.aks_name
   })
-
-  # Architectural fix: Ensure the cluster is replaced if the VNet subnet changes,
-  # as Azure doesn't support moving system node pools between VNets in-place.
-  lifecycle {
-    replace_triggered_by = [
-      null_resource.vnet_trigger
-    ]
-  }
-}
-
-resource "null_resource" "vnet_trigger" {
-  triggers = {
-    subnet_id = var.vnet_subnet_id
-  }
 }
