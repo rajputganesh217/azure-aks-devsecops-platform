@@ -1,5 +1,4 @@
 def dockerImage
-def commitId
 
 pipeline {
 
@@ -256,15 +255,18 @@ def deployWorker() {
 
     az account set --subscription $AZURE_SUBSCRIPTION_ID
 
+    sh """
+        # Dynamically update the image tag in the deployment manifest
+        sed -i "s|image:.*|image: ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID}|g" kubernetes/worker/worker-deployment.yaml
+    """
+
     az aks command invoke \
       --resource-group $AKS_RESOURCE_GROUP \
       --name $AKS_CLUSTER_NAME \
       --file kubernetes/worker/worker-deployment.yaml \
       --command "
         kubectl apply -f worker-deployment.yaml;
-        kubectl set image deployment/worker \
-        worker=${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID};
-        kubectl rollout status deployment/worker
+        kubectl rollout status deployment/worker --timeout=300s
       " || true
     """
 }
@@ -281,7 +283,7 @@ def uploadSecurityReports() {
     az storage blob upload-batch \
       --account-name ${STORAGE_ACCOUNT} \
       --destination security-reports \
-      --destination-path ${APP_NAME} \
+      --destination-path ${APP_NAME}/${env.COMMIT_ID} \
       --source security-reports \
       --auth-mode login
 

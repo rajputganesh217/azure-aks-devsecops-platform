@@ -1,5 +1,4 @@
 def dockerImage
-def commitId
 
 pipeline {
     agent any
@@ -89,7 +88,7 @@ pipeline {
 // --- Logic Functions ---
 
 def prepareWorkspace() {
-    commitId = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
+    env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
     sh "rm -rf security-reports && mkdir -p security-reports"
     
     sh '''
@@ -113,30 +112,31 @@ def runDependencyCheck() {
 }
 
 def buildDockerImage() {
-    sh "docker build -t ${IMAGE_NAME}:frontend-${commitId} -f docker/frontend/Dockerfile ."
+    sh "docker build -t ${IMAGE_NAME}:frontend-${env.COMMIT_ID} -f docker/frontend/Dockerfile ."
 }
 
 def runTrivyScan() {
-    sh "trivy image --quiet --no-progress --timeout 15m --format json -o security-reports/trivy-${APP_NAME}.json ${IMAGE_NAME}:frontend-${commitId} || true"
+    sh "trivy image --quiet --no-progress --timeout 15m --format json -o security-reports/trivy-${APP_NAME}.json ${IMAGE_NAME}:frontend-${env.COMMIT_ID} || true"
 }
 
 def pushDockerImage() {
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
-        sh "docker push ${IMAGE_NAME}:frontend-${commitId}"
+        sh "docker push ${IMAGE_NAME}:frontend-${env.COMMIT_ID}"
     }
 }
 
 def deployFrontend() {
-    // Adding || true to the end of the az command because Azure CLI often returns 
-    // a parsing error 'OK' even when the command succeeded in the cluster.
     sh """
+        # Dynamically update the image tag in the deployment manifest
+        sed -i "s|image:.*|image: ${IMAGE_NAME}:frontend-${env.COMMIT_ID}|g" kubernetes/frontend/deployment.yaml
+
         az aks command invoke \
           --resource-group $AKS_RESOURCE_GROUP \
           --name $AKS_CLUSTER_NAME \
           --file kubernetes/frontend/deployment.yaml \
           --file kubernetes/frontend/service.yaml \
           --file kubernetes/frontend/ingress.yaml \
-          --command "kubectl apply -f deployment.yaml && kubectl apply -f service.yaml && kubectl apply -f ingress.yaml && kubectl set image deployment/shoe-frontend frontend=${IMAGE_NAME}:frontend-${commitId}" || true
+          --command "kubectl apply -f deployment.yaml && kubectl apply -f service.yaml && kubectl apply -f ingress.yaml && kubectl rollout status deployment/shoe-frontend --timeout=300s" || true
     """
 }
 
@@ -145,7 +145,7 @@ def uploadSecurityReports() {
         az storage blob upload-batch \
           --account-name ${STORAGE_ACCOUNT} \
           --destination security-reports \
-          --destination-path ${APP_NAME}/${commitId} \
+          --destination-path ${APP_NAME}/${env.COMMIT_ID} \
           --source security-reports \
           --auth-mode login
     """

@@ -1,5 +1,4 @@
 def dockerImage
-def commitId
 
 pipeline {
 
@@ -251,6 +250,11 @@ def deployToAKS() {
 
     az account set --subscription $AZURE_SUBSCRIPTION_ID
 
+    sh """
+        # Dynamically update the image tag in the deployment manifest
+        sed -i "s|image:.*|image: ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID}|g" kubernetes/backend/backend-deployment.yaml
+    """
+
     az aks command invoke \
       --resource-group $AKS_RESOURCE_GROUP \
       --name $AKS_CLUSTER_NAME \
@@ -259,9 +263,7 @@ def deployToAKS() {
       --command "
         kubectl apply -f backend-deployment.yaml;
         kubectl apply -f backend-service.yaml;
-        kubectl set image deployment/shoe-backend \
-        backend=${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID};
-        kubectl rollout status deployment/shoe-backend
+        kubectl rollout status deployment/shoe-backend --timeout=300s
       " || true
     """
 }
@@ -278,7 +280,7 @@ def uploadSecurityReports() {
     az storage blob upload-batch \
       --account-name ${STORAGE_ACCOUNT} \
       --destination security-reports \
-      --destination-path ${APP_NAME} \
+      --destination-path ${APP_NAME}/${env.COMMIT_ID} \
       --source security-reports \
       --auth-mode login
 

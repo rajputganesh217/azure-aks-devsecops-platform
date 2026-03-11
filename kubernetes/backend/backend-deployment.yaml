@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: mydevopsacr123.azurecr.io/backend:v1
+          image: mydevopsacr123.azurecr.io/backend:latest
           imagePullPolicy: Always
 
           ports:
