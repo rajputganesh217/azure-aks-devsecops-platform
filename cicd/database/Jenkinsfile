@@ -36,9 +36,6 @@ pipeline {
             }
         }
 
-        stage('Azure Login') {
-            steps { script { loginAzure() } }
-        }
 
 /*
         stage('Security: Manifest Scan') {
@@ -82,12 +79,6 @@ pipeline {
     }
 }
 
-def loginAzure() {
-    sh '''
-    az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
-    az account set --subscription $AZURE_SUBSCRIPTION_ID
-    '''
-}
 
 def createSecret() {
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {

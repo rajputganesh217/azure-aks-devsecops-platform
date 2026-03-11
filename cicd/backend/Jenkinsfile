@@ -115,13 +115,6 @@ def prepareWorkspace() {
     env.SOURCE_IMAGE_TAG = "${SOURCE_ENV}-${env.DEPLOY_COMMIT}"
 
     sh "rm -rf security-reports && mkdir -p security-reports"
-    sh """
-    az login --service-principal \
-      -u $AZURE_CLIENT_ID \
-      -p $AZURE_CLIENT_SECRET \
-      --tenant $AZURE_TENANT_ID
-    az account set --subscription $AZURE_SUBSCRIPTION_ID
-    """
 }
 
 def runGitleaksScan() {
