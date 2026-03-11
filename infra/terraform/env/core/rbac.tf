@@ -28,32 +28,3 @@ resource "azurerm_role_assignment" "agic_rg_reader" {
   principal_id         = module.aks.agic_identity_id
 }
 
-############################################
-# Jump Server → AKS: Cluster Admin
-############################################
-
-resource "azurerm_role_assignment" "jump_aks_admin" {
-  scope                = module.aks.cluster_id
-  role_definition_name = "Azure Kubernetes Service Cluster Admin Role"
-  principal_id         = module.jump_server.identity_principal_id
-}
-
-############################################
-# Jump Server → ACR: Pull
-############################################
-
-resource "azurerm_role_assignment" "jump_acr_pull" {
-  scope                = module.acr.acr_id
-  role_definition_name = "AcrPull"
-  principal_id         = module.jump_server.identity_principal_id
-}
-
-############################################
-# Jump Server → Resource Group: Reader
-############################################
-
-resource "azurerm_role_assignment" "jump_rg_reader" {
-  scope                = data.azurerm_resource_group.rg.id
-  role_definition_name = "Reader"
-  principal_id         = module.jump_server.identity_principal_id
-}

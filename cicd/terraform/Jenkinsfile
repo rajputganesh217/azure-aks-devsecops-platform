@@ -224,10 +224,6 @@ def terraformExecute() {
     dir("${env.TF_DIR}") {
         if (params.ACTION == 'apply') {
             sh "terraform apply -auto-approve tfplan-${params.ENVIRONMENT}.out"
-            
-            echo "=== JUMP SERVER PRIVATE KEY (SAVE THIS!) ==="
-            sh "terraform output -raw jump_private_key"
-            echo "============================================"
         }
         else if (params.ACTION == 'destroy') {
             sh """
