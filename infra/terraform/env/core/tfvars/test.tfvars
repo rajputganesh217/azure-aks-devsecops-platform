@@ -6,7 +6,8 @@ aks_name   = "microservices-aks-test"
 dns_prefix = "microakstest"
 
 node_count = 1
-vm_size    = "Standard_B2s"
+vm_size             = "Standard_D2s_v3"
+jump_server_vm_size = "Standard_D2s_v3"
 
 acr_name = "mydevopsacrtest123"
 
