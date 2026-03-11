@@ -21,8 +21,6 @@ pipeline {
         IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
         NAMESPACE  = "${params.ENVIRONMENT}"
 
-        SOURCE_ENV = "${params.ENVIRONMENT == 'qa' ? 'dev' : (params.ENVIRONMENT == 'uat' ? 'qa' : (params.ENVIRONMENT == 'prod' ? 'uat' : ''))}"
-
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
@@ -64,9 +62,9 @@ pipeline {
             }
         }
 */
-        stage('Build Docker Image') {
+        stage('Docker Build & Push') {
             when { expression { params.ENVIRONMENT == 'dev' } }
-            steps { script { buildDockerImage() } }
+            steps { script { dockerBuildPush() } }
         }
 
 /*
@@ -76,14 +74,9 @@ pipeline {
         }
 */
 
-        stage('Push Image to ACR') {
-            when { expression { params.ENVIRONMENT == 'dev' } }
-            steps { script { pushDockerImage() } }
-        }
-
         stage('Promote Image') {
             when { expression { params.ENVIRONMENT != 'dev' } }
-            steps { script { promoteImage() } }
+            steps { script { dockerPullTagPush() } }
         }
 
         stage('Deploy to AKS') {
@@ -108,21 +101,30 @@ pipeline {
     }
 }
 
+// ──────────────────────────────────────────────
+// FUNCTIONS
+// ──────────────────────────────────────────────
+
 def prepareWorkspace() {
     env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
     env.DEPLOY_COMMIT = params.ENVIRONMENT == 'dev' ? env.COMMIT_ID : params.PROMOTE_COMMIT_ID
-    env.IMAGE_TAG = "${params.ENVIRONMENT}-${env.DEPLOY_COMMIT}"
-    env.SOURCE_IMAGE_TAG = "${env.SOURCE_ENV}-${env.DEPLOY_COMMIT}"
+
+    if (params.ENVIRONMENT != 'dev' && !env.DEPLOY_COMMIT?.trim()) {
+        error "PROMOTE_COMMIT_ID is required for non-dev environments!"
+    }
+
+    env.IMAGE_TAG = "${env.IMAGE_NAME}:${env.DEPLOY_COMMIT}"
 
     sh "rm -rf security-reports && mkdir -p security-reports"
+    echo "Environment: ${params.ENVIRONMENT} | Commit: ${env.DEPLOY_COMMIT} | Image: ${env.IMAGE_TAG}"
 }
 
 def runGitleaksScan() {
     sh """
-    gitleaks detect \
-      --source . \
-      --config security/configs/gitleaks.toml \
-      --report-format json \
+    gitleaks detect \\
+      --source . \\
+      --config security/configs/gitleaks.toml \\
+      --report-format json \\
       --report-path security-reports/gitleaks-${APP_NAME}.json || true
     """
 }
@@ -130,58 +132,67 @@ def runGitleaksScan() {
 def runDependencyCheck() {
     dir("${APP_DIR}") {
         sh """
-        /opt/dependency-check/bin/dependency-check.sh \
-          --project ${APP_NAME} \
-          --scan . \
-          --format JSON \
-          --out ../../security-reports \
-          --nvdApiKey ${NVD_API_KEY} \
+        /opt/dependency-check/bin/dependency-check.sh \\
+          --project ${APP_NAME} \\
+          --scan . \\
+          --format JSON \\
+          --out ../../security-reports \\
+          --nvdApiKey ${NVD_API_KEY} \\
           --nvdApiDelay 5000 || true
         """
     }
 }
 
-def buildDockerImage() {
-    sh "docker build -t ${IMAGE_NAME}:${env.IMAGE_TAG} -f docker/${APP_NAME}/Dockerfile ."
+def dockerBuildPush() {
+    sh "docker build -t ${env.IMAGE_TAG} -f docker/${APP_NAME}/Dockerfile ."
+    docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
+        sh "docker push ${env.IMAGE_TAG}"
+    }
+    sh "docker image rm ${env.IMAGE_TAG} || true"
+    echo "Image pushed: ${env.IMAGE_TAG}"
 }
 
 def runTrivyScan() {
     sh """
-    trivy image --quiet \
-      --severity HIGH,CRITICAL \
-      --format json \
-      -o security-reports/trivy-${APP_NAME}.json \
-      ${IMAGE_NAME}:${env.IMAGE_TAG} || true
+    trivy image --quiet \\
+      --severity HIGH,CRITICAL \\
+      --format json \\
+      -o security-reports/trivy-${APP_NAME}.json \\
+      ${env.IMAGE_TAG} || true
     """
 }
 
-def pushDockerImage() {
-    docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
-        sh "docker push ${IMAGE_NAME}:${env.IMAGE_TAG}"
-    }
-}
+def dockerPullTagPush() {
+    def sourceEnvMap = ['qa': 'dev', 'uat': 'qa', 'prod': 'uat']
+    def sourceEnv = sourceEnvMap[params.ENVIRONMENT]
+    def sourceTag = "${env.IMAGE_NAME}:${env.DEPLOY_COMMIT}"
+    def targetTag = "${env.IMAGE_NAME}:${env.DEPLOY_COMMIT}"
 
-def promoteImage() {
-    def targetImage = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
-    def sourceImage = "${env.IMAGE_NAME}:${env.SOURCE_IMAGE_TAG}"
+    echo "Promoting ${sourceTag} → ${params.ENVIRONMENT}"
 
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
-        sh "docker pull ${sourceImage}"
+        sh "docker pull ${sourceTag}"
     }
-    sh "docker tag ${sourceImage} ${targetImage}"
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
-        sh "docker push ${targetImage}"
+        sh "docker push ${targetTag}"
     }
+    sh "docker image rm ${sourceTag} || true"
+    echo "Image promoted to ${params.ENVIRONMENT}: ${targetTag}"
 }
 
 def deployToAKS() {
     def remoteDir = "/tmp/k8s-${APP_NAME}-${env.BUILD_NUMBER}"
+    def dnsHost = "api-${NAMESPACE}.microservices.local"
 
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
+        // Replace placeholders in manifests
         sh """
-        sed -i "s|image:.*|image: ${IMAGE_NAME}:${env.IMAGE_TAG}|g" ${K8S_DIR}/${APP_NAME}-deployment.yaml
-        sed -i "s|host:.*|host: api-${NAMESPACE}.microservices.local|g" ${K8S_DIR}/${APP_NAME}-ingress.yaml
+        sed -i 's|{{IMAGE_TAG}}|${env.IMAGE_TAG}|g' ${K8S_DIR}/${APP_NAME}-deployment.yaml
+        sed -i 's|{{HOSTNAME}}|${dnsHost}|g' ${K8S_DIR}/${APP_NAME}-ingress.yaml
+        """
 
+        // Copy manifests to Jump Server and deploy
+        sh """
         ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
         scp -o StrictHostKeyChecking=no -i \${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
 
@@ -193,15 +204,16 @@ def deployToAKS() {
         "
         """
     }
+    echo "Deployed ${APP_NAME} to ${params.ENVIRONMENT} namespace"
 }
 
 def uploadSecurityReports() {
     sh """
-    az storage blob upload-batch \
-      --account-name ${STORAGE_ACCOUNT} \
-      --destination security-reports \
-      --destination-path ${APP_NAME}/${env.COMMIT_ID} \
-      --source security-reports \
+    az storage blob upload-batch \\
+      --account-name ${STORAGE_ACCOUNT} \\
+      --destination security-reports \\
+      --destination-path ${APP_NAME}/${env.COMMIT_ID} \\
+      --source security-reports \\
       --auth-mode login
     """
 }

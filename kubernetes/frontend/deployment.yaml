@@ -14,9 +14,10 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: mydevopsacr123.azurecr.io/frontend:latest
+        image: "{{IMAGE_TAG}}"
+        imagePullPolicy: Always
         ports:
-        - containerPort: 80
+        - containerPort: 8080
         resources:
           limits:
             cpu: "200m"
@@ -34,12 +35,12 @@ spec:
         livenessProbe:
           httpGet:
             path: /health.html
-            port: 80
+            port: 8080
           initialDelaySeconds: 5
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health.html
-            port: 80
+            port: 8080
           initialDelaySeconds: 3
           periodSeconds: 5
