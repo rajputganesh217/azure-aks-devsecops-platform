@@ -7,17 +7,22 @@ terraform {
 
     random = {
       source  = "hashicorp/random"
-      version = "~>3.5"
+      version = "~> 3.5"
     }
 
     local = {
       source  = "hashicorp/local"
-      version = "~>2.4"
+      version = "~> 2.4"
     }
 
     null = {
       source  = "hashicorp/null"
-      version = "~>3.2"
+      version = "~> 3.2"
+    }
+
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
     }
   }
 

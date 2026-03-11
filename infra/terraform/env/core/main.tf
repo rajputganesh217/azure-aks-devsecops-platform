@@ -42,6 +42,7 @@ module "log_analytics" {
   resource_group_name = module.rg.rg_name
   tags                = module.tags.tags
 }
+
 ############################################
 # Virtual Network (Hub and Spoke)
 ############################################
@@ -72,12 +73,12 @@ module "acr" {
   resource_group_name = module.rg.rg_name
   tags                = module.tags.tags
 }
+
 ############################################
 # Application Gateway
 ############################################
 
 module "app_gateway" {
-
   source = "../../modules/app-gateway"
 
   name                = "appgw-${random_string.suffix.result}"
@@ -90,14 +91,11 @@ module "app_gateway" {
   tags     = module.tags.tags
 }
 
-
-
 ############################################
 # AKS Cluster
 ############################################
 
 module "aks" {
-
   source = "../../modules/aks"
 
   aks_name            = var.aks_name
@@ -158,3 +156,32 @@ resource "local_file" "kubeconfig" {
   filename = "${path.module}/kubeconfig"
 }
 
+############################################
+# Jump Server SSH Key
+############################################
+
+resource "tls_private_key" "jump_ssh" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+############################################
+# Jump Server
+############################################
+
+module "jump_server" {
+  source = "../../modules/jump-server"
+
+  name                = "devops-jump-server"
+  location            = var.location
+  resource_group_name = module.rg.rg_name
+  subnet_id           = module.vnet.app_subnet_ids["subnet-private-app-az1"]
+  vm_size             = var.jump_server_vm_size
+  admin_username      = var.jump_admin_username
+  ssh_public_key      = tls_private_key.jump_ssh.public_key_openssh
+
+  aks_name = var.aks_name
+  acr_name = var.acr_name
+
+  tags = module.tags.tags
+}

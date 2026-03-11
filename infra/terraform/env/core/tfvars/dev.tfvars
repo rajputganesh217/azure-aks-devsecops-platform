@@ -29,3 +29,6 @@ db_subnets = {
   "subnet-private-db-az2" = "10.1.21.0/24"
   "subnet-private-db-az3" = "10.1.22.0/24"
 }
+
+jump_server_vm_size = "Standard_D2s_v3"
+jump_admin_username = "ganesh"

@@ -9,7 +9,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
     name                        = "system"
     node_count                  = var.node_count
     vm_size                     = var.vm_size
-    max_pods                    = 30
+    max_pods                    = 50
     vnet_subnet_id              = var.vnet_subnet_id
     temporary_name_for_rotation = "tmpsys"
   }

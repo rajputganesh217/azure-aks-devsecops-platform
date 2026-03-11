@@ -119,3 +119,19 @@ variable "cost_center" {
   default = "CC1001"
 }
 
+############################################
+# Jump Server Configuration
+############################################
+
+variable "jump_server_vm_size" {
+  description = "VM size for the jump server"
+  type        = string
+  default     = "Standard_D2s_v3"
+}
+
+variable "jump_admin_username" {
+  description = "Admin username for the jump server"
+  type        = string
+  default     = "ganesh"
+}
+
