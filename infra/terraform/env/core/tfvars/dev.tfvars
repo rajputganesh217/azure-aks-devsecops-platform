@@ -13,7 +13,7 @@ acr_name = "mydevopsacr123"
 environment        = "dev"
 vnet_address_space = ["10.1.0.0/16"]
 
-aks_vnet_subnet_id = "/subscriptions/1f75cc35-5146-4563-aed8-3edd881071db/resourceGroups/aks-microservices-rg/providers/Microsoft.Network/virtualNetworks/dev-devsecops-vnet-g0aa9/subnets/subnet-private-app-az1"
+aks_vnet_subnet_id = ""
 public_subnets = {
   "subnet-public-az1" = "10.1.1.0/24"
   "subnet-public-az2" = "10.1.2.0/24"

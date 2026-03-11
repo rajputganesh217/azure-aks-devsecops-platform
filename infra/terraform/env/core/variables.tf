@@ -118,3 +118,4 @@ variable "cost_center" {
   type    = string
   default = "CC1001"
 }
+
