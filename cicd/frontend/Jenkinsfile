@@ -27,8 +27,8 @@ pipeline {
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        AKS_RESOURCE_GROUP = "aks-microservices-rg"
-        AKS_CLUSTER_NAME   = "microservices-aks"
+        AKS_RESOURCE_GROUP = "aks-microservices${ENV_SUFFIX}-rg"
+        AKS_CLUSTER_NAME   = "microservices-aks${ENV_SUFFIX}"
 
         NVD_API_KEY = credentials('NVD_API_KEY')
     }

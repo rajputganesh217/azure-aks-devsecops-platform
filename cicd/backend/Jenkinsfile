@@ -4,6 +4,11 @@ def commitId
 pipeline {
 
     agent any
+    
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat','prod'], description: 'Target Environment')
+    }
+
 
     environment {
 
@@ -20,13 +25,19 @@ pipeline {
 
         STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
 
+        ENV_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : '-' + params.ENVIRONMENT}"
+        ACR_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : params.ENVIRONMENT}"
+
+        REGISTRY   = "mydevopsacr${ACR_SUFFIX}123.azurecr.io"
+        IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
+
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        AKS_RESOURCE_GROUP = "aks-microservices-rg"
-        AKS_CLUSTER_NAME   = "microservices-aks"
+        AKS_RESOURCE_GROUP = "aks-microservices${ENV_SUFFIX}-rg"
+        AKS_CLUSTER_NAME   = "microservices-aks${ENV_SUFFIX}"
 
         NVD_API_KEY = credentials('NVD_API_KEY')
     }

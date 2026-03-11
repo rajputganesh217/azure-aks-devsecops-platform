@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat','prod'], description: 'Target Environment')
+    }
+
+
     environment {
         STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
         
@@ -9,8 +14,9 @@ pipeline {
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        AKS_RESOURCE_GROUP = "aks-microservices-rg"
-        AKS_CLUSTER_NAME   = "microservices-aks"
+        ENV_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : '-' + params.ENVIRONMENT}"
+        AKS_RESOURCE_GROUP = "aks-microservices${ENV_SUFFIX}-rg"
+        AKS_CLUSTER_NAME   = "microservices-aks${ENV_SUFFIX}"
 
         POSTGRES_USER      = credentials('POSTGRES_USER')
         POSTGRES_PASSWORD  = credentials('POSTGRES_PASSWORD')
