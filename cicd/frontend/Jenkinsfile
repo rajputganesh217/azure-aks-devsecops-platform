@@ -5,6 +5,7 @@ pipeline {
 
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat','prod'], description: 'Target Environment')
+        string(name: 'PROMOTE_COMMIT_ID', defaultValue: '', description: 'Commit ID to promote (required for qa/uat/prod)')
     }
 
     environment {
@@ -14,21 +15,17 @@ pipeline {
         STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
         DOCKER_CREDS_ID = "azure-acr-credentials"
 
-        
         REGISTRY   = "mydevopsacr123.azurecr.io"
         IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
         NAMESPACE  = "${params.ENVIRONMENT}"
 
-        // Source environment for image promotion (qa←dev, uat←qa, prod←uat)
         SOURCE_ENV = "${params.ENVIRONMENT == 'qa' ? 'dev' : (params.ENVIRONMENT == 'uat' ? 'qa' : (params.ENVIRONMENT == 'prod' ? 'uat' : ''))}"
 
-        /
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        
         AKS_RESOURCE_GROUP = "aks-microservices-rg"
         AKS_CLUSTER_NAME   = "microservices-aks"
 
@@ -37,11 +34,7 @@ pipeline {
 
     stages {
         stage('Prepare') {
-            steps { 
-                script { 
-                    prepareWorkspace() 
-                } 
-            }
+            steps { script { prepareWorkspace() } }
         }
 
         stage('Security Scans') {
@@ -67,55 +60,31 @@ pipeline {
 
         stage('Docker Build') {
             when { expression { params.ENVIRONMENT == 'dev' } }
-            steps { 
-                script { 
-                    buildDockerImage() 
-                } 
-            }
+            steps { script { buildDockerImage() } }
         }
 
         stage('Trivy Image Scan') {
             when { expression { params.ENVIRONMENT == 'dev' } }
-            steps { 
-                script { 
-                    runTrivyScan() 
-                } 
-            }
+            steps { script { runTrivyScan() } }
         }
 
         stage('Push Image to ACR') {
             when { expression { params.ENVIRONMENT == 'dev' } }
-            steps { 
-                script { 
-                    pushDockerImage() 
-                } 
-            }
+            steps { script { pushDockerImage() } }
         }
 
         stage('Promote Image') {
             when { expression { params.ENVIRONMENT != 'dev' } }
-            steps {
-                script {
-                    promoteImage()
-                }
-            }
+            steps { script { promoteImage() } }
         }
 
         stage('Deploy to AKS') {
-            steps { 
-                script { 
-                    deployToAKS() 
-                } 
-            }
+            steps { script { deployToAKS() } }
         }
 
         stage('Upload Security Reports') {
             when { expression { params.ENVIRONMENT == 'dev' } }
-            steps { 
-                script { 
-                    uploadSecurityReports() 
-                } 
-            }
+            steps { script { uploadSecurityReports() } }
         }
     }
 
@@ -124,27 +93,20 @@ pipeline {
             archiveArtifacts artifacts: 'security-reports/**', allowEmptyArchive: true
             cleanWs()
         }
-        success {
-            echo "${APP_NAME} [${params.ENVIRONMENT}] deployment successful!"
-        }
-        failure {
-            echo "${APP_NAME} [${params.ENVIRONMENT}] pipeline failed!"
-        }
+        success { echo "${APP_NAME} [${params.ENVIRONMENT}] deployment successful!" }
+        failure { echo "${APP_NAME} [${params.ENVIRONMENT}] pipeline failed!" }
     }
 }
 
-// --- Logic Functions ---
-
 def prepareWorkspace() {
-    def commitId = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
-    env.COMMIT_ID = commitId
-    // Tag format: <env>-<commit> e.g. dev-abc12345, qa-abc12345
-    env.IMAGE_TAG = "${params.ENVIRONMENT}-${commitId}"
-    // Source tag for promotion (e.g. when deploying to qa, source is dev-<commit>)
-    env.SOURCE_IMAGE_TAG = "${SOURCE_ENV}-${commitId}"
-    
+    env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
+
+    // dev uses current commit, non-dev uses the provided PROMOTE_COMMIT_ID
+    env.DEPLOY_COMMIT = params.ENVIRONMENT == 'dev' ? env.COMMIT_ID : params.PROMOTE_COMMIT_ID
+    env.IMAGE_TAG = "${params.ENVIRONMENT}-${env.DEPLOY_COMMIT}"
+    env.SOURCE_IMAGE_TAG = "${SOURCE_ENV}-${env.DEPLOY_COMMIT}"
+
     sh "rm -rf security-reports && mkdir -p security-reports"
-    
     sh """
         az login --service-principal -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID}
         az account set --subscription ${AZURE_SUBSCRIPTION_ID}
@@ -180,16 +142,13 @@ def pushDockerImage() {
 }
 
 def promoteImage() {
-    // Pull the image from the previous environment's tag, re-tag for this environment, push
     def sourceImage = "${IMAGE_NAME}:${env.SOURCE_IMAGE_TAG}"
     def targetImage = "${IMAGE_NAME}:${env.IMAGE_TAG}"
 
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
         sh "docker pull ${sourceImage}"
     }
-
     sh "docker tag ${sourceImage} ${targetImage}"
-
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
         sh "docker push ${targetImage}"
     }
@@ -197,10 +156,8 @@ def promoteImage() {
 
 def deployToAKS() {
     sh """
-       
         sed -i "s|image:.*|image: ${IMAGE_NAME}:${env.IMAGE_TAG}|g" ${K8S_DIR}/deployment.yaml
 
-        
         FILE_ARGS=\$(ls ${K8S_DIR}/*.yaml | sed 's/^/--file /' | tr '\\n' ' ')
 
         az aks command invoke \

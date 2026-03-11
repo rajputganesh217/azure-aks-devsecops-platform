@@ -9,13 +9,12 @@ pipeline {
         K8S_DIR = "kubernetes/postgres"
         STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
         NAMESPACE = "${params.ENVIRONMENT}"
-        
+
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        // Single AKS cluster
         AKS_RESOURCE_GROUP = "aks-microservices-rg"
         AKS_CLUSTER_NAME   = "microservices-aks"
 

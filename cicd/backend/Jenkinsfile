@@ -2,9 +2,10 @@ def dockerImage
 
 pipeline {
     agent any
-    
+
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat','prod'], description: 'Target Environment')
+        string(name: 'PROMOTE_COMMIT_ID', defaultValue: '', description: 'Commit ID to promote (required for qa/uat/prod)')
     }
 
     environment {
@@ -14,15 +15,12 @@ pipeline {
         DOCKER_CREDS_ID = "azure-acr-credentials"
         SONAR_PROJECT_KEY = "${APP_NAME}-service"
         SONAR_SERVER_ID   = "sonarqube"
-        
         STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
 
-        // Single ACR for all environments
         REGISTRY   = "mydevopsacr123.azurecr.io"
         IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
         NAMESPACE  = "${params.ENVIRONMENT}"
 
-        // Source environment for image promotion (qa←dev, uat←qa, prod←uat)
         SOURCE_ENV = "${params.ENVIRONMENT == 'qa' ? 'dev' : (params.ENVIRONMENT == 'uat' ? 'qa' : (params.ENVIRONMENT == 'prod' ? 'uat' : ''))}"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
@@ -30,7 +28,6 @@ pipeline {
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        // Single AKS cluster
         AKS_RESOURCE_GROUP = "aks-microservices-rg"
         AKS_CLUSTER_NAME   = "microservices-aks"
 
@@ -39,25 +36,17 @@ pipeline {
 
     stages {
         stage('Prepare') {
-            steps {
-                script {
-                    prepareWorkspace()
-                }
-            }
+            steps { script { prepareWorkspace() } }
         }
 
         stage('Security Scans') {
             when { expression { params.ENVIRONMENT == 'dev' } }
             parallel {
                 stage('Gitleaks') {
-                    steps {
-                        script { runGitleaksScan() }
-                    }
+                    steps { script { runGitleaksScan() } }
                 }
                 stage('Dependency Check') {
-                    steps {
-                        script { runDependencyCheck() }
-                    }
+                    steps { script { runDependencyCheck() } }
                 }
             }
         }
@@ -73,43 +62,31 @@ pipeline {
 
         stage('Build Docker Image') {
             when { expression { params.ENVIRONMENT == 'dev' } }
-            steps {
-                script { buildDockerImage() }
-            }
+            steps { script { buildDockerImage() } }
         }
 
         stage('Trivy Image Scan') {
             when { expression { params.ENVIRONMENT == 'dev' } }
-            steps {
-                script { runTrivyScan() }
-            }
+            steps { script { runTrivyScan() } }
         }
 
         stage('Push Image to ACR') {
             when { expression { params.ENVIRONMENT == 'dev' } }
-            steps {
-                script { pushDockerImage() }
-            }
+            steps { script { pushDockerImage() } }
         }
 
         stage('Promote Image') {
             when { expression { params.ENVIRONMENT != 'dev' } }
-            steps {
-                script { promoteImage() }
-            }
+            steps { script { promoteImage() } }
         }
 
         stage('Deploy to AKS') {
-            steps {
-                script { deployToAKS() }
-            }
+            steps { script { deployToAKS() } }
         }
 
         stage('Upload Security Reports') {
             when { expression { params.ENVIRONMENT == 'dev' } }
-            steps {
-                script { uploadSecurityReports() }
-            }
+            steps { script { uploadSecurityReports() } }
         }
     }
 
@@ -118,27 +95,24 @@ pipeline {
             archiveArtifacts artifacts: 'security-reports/**', allowEmptyArchive: true
             cleanWs()
         }
-        success {
-            echo "${APP_NAME} [${params.ENVIRONMENT}] pipeline completed successfully."
-        }
-        failure {
-            echo "${APP_NAME} [${params.ENVIRONMENT}] pipeline failed."
-        }
+        success { echo "${APP_NAME} [${params.ENVIRONMENT}] pipeline completed successfully." }
+        failure { echo "${APP_NAME} [${params.ENVIRONMENT}] pipeline failed." }
     }
 }
 
 def prepareWorkspace() {
     env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
-    env.IMAGE_TAG = "${params.ENVIRONMENT}-${env.COMMIT_ID}"
-    env.SOURCE_IMAGE_TAG = "${SOURCE_ENV}-${env.COMMIT_ID}"
-    sh "rm -rf security-reports && mkdir -p security-reports"
 
+    env.DEPLOY_COMMIT = params.ENVIRONMENT == 'dev' ? env.COMMIT_ID : params.PROMOTE_COMMIT_ID
+    env.IMAGE_TAG = "${params.ENVIRONMENT}-${env.DEPLOY_COMMIT}"
+    env.SOURCE_IMAGE_TAG = "${SOURCE_ENV}-${env.DEPLOY_COMMIT}"
+
+    sh "rm -rf security-reports && mkdir -p security-reports"
     sh """
     az login --service-principal \
       -u $AZURE_CLIENT_ID \
       -p $AZURE_CLIENT_SECRET \
       --tenant $AZURE_TENANT_ID
-
     az account set --subscription $AZURE_SUBSCRIPTION_ID
     """
 }
@@ -194,9 +168,7 @@ def promoteImage() {
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
         sh "docker pull ${sourceImage}"
     }
-
     sh "docker tag ${sourceImage} ${targetImage}"
-
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
         sh "docker push ${targetImage}"
     }
