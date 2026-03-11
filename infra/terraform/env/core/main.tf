@@ -139,7 +139,7 @@ module "storage_account" {
 
   storage_account_name = "${var.environment}devsecopsrep${random_string.suffix.result}"
   location             = var.location
-  resource_group_name  = module.rg.rg_name
+  resource_group_name  = data.azurerm_resource_group.rg.name
   tags                 = module.tags.tags
 }
 

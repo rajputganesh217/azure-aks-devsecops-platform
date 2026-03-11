@@ -23,7 +23,7 @@ resource "azurerm_role_assignment" "agic_appgw_permission" {
 ############################################
 
 resource "azurerm_role_assignment" "agic_rg_reader" {
-  scope                = module.rg.rg_id
+  scope                = data.azurerm_resource_group.rg.id
   role_definition_name = "Reader"
   principal_id         = module.aks.agic_identity_id
 }
@@ -53,7 +53,7 @@ resource "azurerm_role_assignment" "jump_acr_pull" {
 ############################################
 
 resource "azurerm_role_assignment" "jump_rg_reader" {
-  scope                = module.rg.rg_id
+  scope                = data.azurerm_resource_group.rg.id
   role_definition_name = "Reader"
   principal_id         = module.jump_server.identity_principal_id
 }
