@@ -28,7 +28,7 @@ environment {
     TF_VAR_postgres_db       = credentials('POSTGRES_DB')
     TF_VAR_postgres_user     = credentials('POSTGRES_USER')
     TF_VAR_postgres_password = credentials('POSTGRES_PASSWORD')
-    TF_VAR_jump_ssh_public_key = credentials('JUMP_SSH_PUBLIC_KEY').trim()
+    TF_VAR_postgres_password = credentials('POSTGRES_PASSWORD')
 }
 
 stages {
@@ -213,15 +213,17 @@ dir("${env.TF_DIR}") {
 def terraformPlan() {
 
 
-dir("${env.TF_DIR}") {
-
-    sh """
-    terraform plan \
-      -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
-      -var='commit_id=${env.COMMIT_ID}' \
-      -out=tfplan-${params.ENVIRONMENT}.out
-    """
-}
+    withCredentials([string(credentialsId: 'JUMP_SSH_PUBLIC_KEY', variable: 'PUBLIC_KEY')]) {
+        dir("${env.TF_DIR}") {
+            sh """
+            terraform plan \
+              -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
+              -var='commit_id=${env.COMMIT_ID}' \
+              -var='jump_ssh_public_key=${PUBLIC_KEY.trim()}' \
+              -out=tfplan-${params.ENVIRONMENT}.out
+            """
+        }
+    }
 
 
 }
@@ -229,28 +231,32 @@ dir("${env.TF_DIR}") {
 def terraformExecute() {
 
 
-dir("${env.TF_DIR}") {
+    withCredentials([string(credentialsId: 'JUMP_SSH_PUBLIC_KEY', variable: 'PUBLIC_KEY')]) {
+        dir("${env.TF_DIR}") {
 
-    if (params.ACTION == 'apply') {
+            if (params.ACTION == 'apply') {
 
-        sh """
-        terraform apply \
-          -auto-approve \
-          tfplan-${params.ENVIRONMENT}.out
-        """
+                sh """
+                terraform apply \
+                  -auto-approve \
+                  -var='jump_ssh_public_key=${PUBLIC_KEY.trim()}' \
+                  tfplan-${params.ENVIRONMENT}.out
+                """
 
+            }
+
+            else if (params.ACTION == 'destroy') {
+
+                sh """
+                terraform destroy \
+                  -auto-approve \
+                  -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
+                  -var='commit_id=${env.COMMIT_ID}' \
+                  -var='jump_ssh_public_key=${PUBLIC_KEY.trim()}'
+                """
+            }
+        }
     }
-
-    else if (params.ACTION == 'destroy') {
-
-        sh """
-        terraform destroy \
-          -auto-approve \
-          -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
-          -var='commit_id=${env.COMMIT_ID}'
-        """
-    }
-}
 
 
 }
