@@ -20,15 +20,11 @@ module "tags" {
 }
 
 ############################################
-# Resource Group
+# Resource Group (Pre-created for State)
 ############################################
 
-module "rg" {
-  source = "../../modules/resource-group"
-
-  resource_group_name = var.resource_group_name
-  location            = var.location
-  tags                = module.tags.tags
+data "azurerm_resource_group" "rg" {
+  name = var.resource_group_name
 }
 
 ############################################
@@ -39,7 +35,7 @@ module "log_analytics" {
   source = "../../modules/log-analytics"
 
   location            = var.location
-  resource_group_name = module.rg.rg_name
+  resource_group_name = data.azurerm_resource_group.rg.name
   tags                = module.tags.tags
 }
 
@@ -50,7 +46,7 @@ module "log_analytics" {
 module "vnet" {
   source = "../../modules/vnet"
 
-  resource_group_name = module.rg.rg_name
+  resource_group_name = data.azurerm_resource_group.rg.name
   location            = var.location
   vnet_name           = "${var.environment}-devsecops-vnet-${random_string.suffix.result}"
 
@@ -70,7 +66,7 @@ module "acr" {
 
   acr_name            = var.acr_name
   location            = var.location
-  resource_group_name = module.rg.rg_name
+  resource_group_name = data.azurerm_resource_group.rg.name
   tags                = module.tags.tags
 }
 
@@ -83,7 +79,7 @@ module "app_gateway" {
 
   name                = "appgw-${random_string.suffix.result}"
   location            = var.location
-  resource_group_name = module.rg.rg_name
+  resource_group_name = data.azurerm_resource_group.rg.name
 
   subnet_id = module.vnet.public_subnet_ids["subnet-public-az1"]
 
@@ -100,7 +96,7 @@ module "aks" {
 
   aks_name            = var.aks_name
   location            = var.location
-  resource_group_name = module.rg.rg_name
+  resource_group_name = data.azurerm_resource_group.rg.name
   dns_prefix          = var.dns_prefix
   node_count          = var.node_count
   vm_size             = var.vm_size
@@ -122,7 +118,7 @@ module "keyvault" {
 
   keyvault_name       = "devsecops-kv-${random_string.suffix.result}"
   location            = var.location
-  resource_group_name = module.rg.rg_name
+  resource_group_name = data.azurerm_resource_group.rg.name
   tenant_id           = data.azurerm_client_config.current.tenant_id
 
   csi_identity_object_id = module.aks.key_vault_secrets_provider_identity_object_id
@@ -174,7 +170,7 @@ module "jump_server" {
 
   name                = "devops-jump-server"
   location            = var.location
-  resource_group_name = module.rg.rg_name
+  resource_group_name = data.azurerm_resource_group.rg.name
   subnet_id           = module.vnet.app_subnet_ids["subnet-private-app-az1"]
   vm_size             = var.jump_server_vm_size
   admin_username      = var.jump_admin_username

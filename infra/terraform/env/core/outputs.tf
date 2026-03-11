@@ -3,7 +3,7 @@ output "cluster_name" {
 }
 
 output "resource_group" {
-  value = module.rg.rg_name
+  value = data.azurerm_resource_group.rg.name
 }
 
 output "acr_login_server" {
