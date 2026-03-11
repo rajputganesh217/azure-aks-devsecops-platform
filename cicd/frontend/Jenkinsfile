@@ -110,7 +110,7 @@ def prepareWorkspace() {
     env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
     env.DEPLOY_COMMIT = params.ENVIRONMENT == 'dev' ? env.COMMIT_ID : params.PROMOTE_COMMIT_ID
     env.IMAGE_TAG = "${params.ENVIRONMENT}-${env.DEPLOY_COMMIT}"
-    env.SOURCE_IMAGE_TAG = "${SOURCE_ENV}-${env.DEPLOY_COMMIT}"
+    env.SOURCE_IMAGE_TAG = "${env.SOURCE_ENV}-${env.DEPLOY_COMMIT}"
 
     sh "rm -rf security-reports && mkdir -p security-reports"
 }
@@ -144,8 +144,8 @@ def pushDockerImage() {
 }
 
 def promoteImage() {
-    def sourceImage = "${IMAGE_NAME}:${env.SOURCE_IMAGE_TAG}"
-    def targetImage = "${IMAGE_NAME}:${env.IMAGE_TAG}"
+    def targetImage = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+    def sourceImage = "${env.IMAGE_NAME}:${env.SOURCE_IMAGE_TAG}"
 
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
         sh "docker pull ${sourceImage}"
