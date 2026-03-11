@@ -57,4 +57,10 @@ resource "azurerm_kubernetes_cluster" "aks" {
   tags = merge(var.tags, {
     Name = var.aks_name
   })
+
+  lifecycle {
+    replace_triggered_by = [
+      var.vnet_subnet_id
+    ]
+  }
 }
