@@ -1,12 +1,12 @@
 
 resource_group_name = "aks-microservices-test-rg"
-location            = "canadacentral"
+location            = "eastus"
 
 aks_name   = "microservices-aks-test"
 dns_prefix = "microakstest"
 
 node_count = 1
-vm_size    = "Standard_D4s_v5"
+vm_size    = "Standard_B2s"
 
 acr_name = "mydevopsacrtest123"
 

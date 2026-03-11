@@ -1,12 +1,12 @@
 
 resource_group_name = "aks-microservices-prod-rg"
-location            = "canadacentral"
+location            = "eastus"
 
 aks_name   = "microservices-aks-prod"
 dns_prefix = "microaksprod"
 
-node_count = 3
-vm_size    = "Standard_DS2_v2"
+node_count = 1
+vm_size    = "Standard_B2s"
 
 acr_name = "mydevopsacrprod123"
 

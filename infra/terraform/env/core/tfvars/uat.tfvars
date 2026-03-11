@@ -1,12 +1,12 @@
 
 resource_group_name = "aks-microservices-uat-rg"
-location            = "canadacentral"
+location            = "eastus"
 
 aks_name   = "microservices-aks-uat"
 dns_prefix = "microaksuat"
 
-node_count = 2
-vm_size    = "Standard_DS2_v2"
+node_count = 1
+vm_size    = "Standard_B2s"
 
 acr_name = "mydevopsacruat123"
 

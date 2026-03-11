@@ -1,12 +1,12 @@
 
 resource_group_name = "aks-microservices-qa-rg"
-location            = "canadacentral"
+location            = "eastus"
 
 aks_name   = "microservices-aks-qa"
 dns_prefix = "microaksqa"
 
-node_count = 2
-vm_size    = "Standard_DS2_v2"
+node_count = 1
+vm_size    = "Standard_B2s"
 
 acr_name = "mydevopsacrqa123"
 
