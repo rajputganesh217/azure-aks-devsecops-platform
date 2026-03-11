@@ -82,6 +82,12 @@ pipeline {
             archiveArtifacts artifacts: 'security-reports/**', allowEmptyArchive: true
             cleanWs()
         }
+        success {
+            echo "Frontend deployment successful!"
+        }
+        failure {
+            echo "Frontend pipeline failed!"
+        }
     }
 }
 
@@ -91,10 +97,11 @@ def prepareWorkspace() {
     env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
     sh "rm -rf security-reports && mkdir -p security-reports"
     
-    sh '''
-        az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
-        az account set --subscription $AZURE_SUBSCRIPTION_ID
-    '''
+    // Log in once at the start
+    sh """
+        az login --service-principal -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID}
+        az account set --subscription ${AZURE_SUBSCRIPTION_ID}
+    """
 }
 
 def runGitleaksScan() {
@@ -103,11 +110,11 @@ def runGitleaksScan() {
 
 def runDependencyCheck() {
     dir("${APP_DIR}") {
-        sh '''
+        sh """
             /opt/dependency-check/bin/dependency-check.sh \
               --project frontend --scan . --format JSON --out ../../security-reports \
-              --nvdApiKey $NVD_API_KEY --nvdApiDelay 5000 || true
-        '''
+              --nvdApiKey ${NVD_API_KEY} --nvdApiDelay 5000 || true
+        """
     }
 }
 
@@ -126,17 +133,19 @@ def pushDockerImage() {
 }
 
 def deployFrontend() {
+    // FIX: Combined shell logic to avoid nested blocks and used | delimiter for sed
     sh """
-        # Dynamically update the image tag in the deployment manifest
+        # Update image tag
         sed -i "s|image:.*|image: ${IMAGE_NAME}:frontend-${env.COMMIT_ID}|g" kubernetes/frontend/deployment.yaml
 
+        # Invoke all frontend manifests at once
         az aks command invoke \
-          --resource-group $AKS_RESOURCE_GROUP \
-          --name $AKS_CLUSTER_NAME \
+          --resource-group ${AKS_RESOURCE_GROUP} \
+          --name ${AKS_CLUSTER_NAME} \
           --file kubernetes/frontend/deployment.yaml \
           --file kubernetes/frontend/service.yaml \
           --file kubernetes/frontend/ingress.yaml \
-          --command "kubectl apply -f deployment.yaml && kubectl apply -f service.yaml && kubectl apply -f ingress.yaml && kubectl rollout status deployment/shoe-frontend --timeout=300s" || true
+          --command "kubectl apply -f deployment.yaml && kubectl apply -f service.yaml && kubectl apply -f ingress.yaml && kubectl rollout status deployment/shoe-frontend --timeout=300s"
     """
 }
 
