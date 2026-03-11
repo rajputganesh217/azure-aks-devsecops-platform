@@ -12,3 +12,7 @@ output "key_vault_secrets_provider_identity_object_id" {
 output "agic_identity_id" {
   value = azurerm_kubernetes_cluster.aks.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
 }
+output "kube_config_raw" {
+  value     = azurerm_kubernetes_cluster.aks.kube_config_raw
+  sensitive = true
+}

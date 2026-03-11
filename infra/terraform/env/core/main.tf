@@ -146,3 +146,13 @@ module "storage_account" {
   resource_group_name  = module.rg.rg_name
   tags                 = module.tags.tags
 }
+
+############################################
+# Kubeconfig Generation
+############################################
+
+resource "local_file" "kubeconfig" {
+  content  = module.aks.kube_config_raw
+  filename = "${path.module}/kubeconfig"
+}
+
