@@ -28,6 +28,20 @@ resource "azurerm_key_vault" "kv" {
     ]
   }
 
+  # AKS CSI Driver access policy for reading secrets
+  dynamic "access_policy" {
+    for_each = var.csi_identity_object_id != "" ? [1] : []
+    content {
+      tenant_id = var.tenant_id
+      object_id = var.csi_identity_object_id
+
+      secret_permissions = [
+        "Get",
+        "List"
+      ]
+    }
+  }
+
   tags = merge(var.tags, {
     Name = var.keyvault_name
   })

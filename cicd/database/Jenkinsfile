@@ -5,18 +5,19 @@ pipeline {
         choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat','prod'], description: 'Target Environment')
     }
 
-
     environment {
+        K8S_DIR = "kubernetes/postgres"
         STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
+        NAMESPACE = "${params.ENVIRONMENT}"
         
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        ENV_SUFFIX = "${params.ENVIRONMENT == 'dev' ? '' : '-' + params.ENVIRONMENT}"
-        AKS_RESOURCE_GROUP = "aks-microservices${ENV_SUFFIX}-rg"
-        AKS_CLUSTER_NAME   = "microservices-aks${ENV_SUFFIX}"
+        // Single AKS cluster
+        AKS_RESOURCE_GROUP = "aks-microservices-rg"
+        AKS_CLUSTER_NAME   = "microservices-aks"
 
         POSTGRES_USER      = credentials('POSTGRES_USER')
         POSTGRES_PASSWORD  = credentials('POSTGRES_PASSWORD')
@@ -38,10 +39,10 @@ pipeline {
         }
 
         stage('Security: Manifest Scan') {
+            when { expression { params.ENVIRONMENT == 'dev' } }
             steps {
                 script {
-                    // Kube-score checks for best practices in your YAML files
-                    sh "docker run --rm -v \$(pwd):/project zegl/kube-score:latest score kubernetes/postgres/*.yaml > security-reports/kube-score-database.txt || true"
+                    sh "docker run --rm -v \$(pwd):/project zegl/kube-score:latest score ${K8S_DIR}/*.yaml > security-reports/kube-score-database.txt || true"
                 }
             }
         }
@@ -51,6 +52,7 @@ pipeline {
         }
 
         stage('Security: Image Scan') {
+            when { expression { params.ENVIRONMENT == 'dev' } }
             steps { script { scanPostgres() } }
         }
 
@@ -59,6 +61,7 @@ pipeline {
         }
 
         stage('Upload Reports') {
+            when { expression { params.ENVIRONMENT == 'dev' } }
             steps { script { uploadReports() } }
         }
     }
@@ -79,24 +82,24 @@ def loginAzure() {
 }
 
 def createSecret() {
-    sh '''
+    sh """
     az aks command invoke \
-      --resource-group $AKS_RESOURCE_GROUP \
-      --name $AKS_CLUSTER_NAME \
+      --resource-group \$AKS_RESOURCE_GROUP \
+      --name \$AKS_CLUSTER_NAME \
       --command "
-        kubectl delete secret postgres-secret --ignore-not-found;
-        kubectl create secret generic postgres-secret \
-        --from-literal=POSTGRES_DB=$POSTGRES_DB \
-        --from-literal=POSTGRES_USER=$POSTGRES_USER \
-        --from-literal=POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+        kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -;
+        kubectl delete secret postgres-secret -n ${NAMESPACE} --ignore-not-found;
+        kubectl create secret generic postgres-secret -n ${NAMESPACE} \
+        --from-literal=POSTGRES_DB=\$POSTGRES_DB \
+        --from-literal=POSTGRES_USER=\$POSTGRES_USER \
+        --from-literal=POSTGRES_PASSWORD=\$POSTGRES_PASSWORD
       " || true
-    '''
+    """
 }
 
 def scanPostgres() {
     sh '''
     docker pull postgres:15
-    # Added timeout and no-progress to prevent 'context deadline exceeded'
     trivy image --quiet --no-progress --timeout 15m \
       --severity HIGH,CRITICAL \
       --format json \
@@ -106,23 +109,23 @@ def scanPostgres() {
 }
 
 def deployPostgres() {
-    sh '''
+    sh """
+    FILE_ARGS=\$(ls ${K8S_DIR}/*.yaml | sed 's/^/--file /' | tr '\\n' ' ')
+
     az aks command invoke \
-      --resource-group $AKS_RESOURCE_GROUP \
-      --name $AKS_CLUSTER_NAME \
-      --file kubernetes/postgres/postgres-deployment.yaml \
-      --file kubernetes/postgres/postgres-service.yaml \
+      --resource-group \$AKS_RESOURCE_GROUP \
+      --name \$AKS_CLUSTER_NAME \
+      \${FILE_ARGS} \
       --command "
-        kubectl apply -f postgres-deployment.yaml;
-        kubectl apply -f postgres-service.yaml;
-        kubectl rollout status deployment/postgres --timeout=300s
+        kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -;
+        kubectl apply -f . -n ${NAMESPACE};
+        kubectl rollout status deployment/postgres -n ${NAMESPACE} --timeout=300s
       " || true
-    '''
+    """
 }
 
 def uploadReports() {
     sh '''
-    # Organizing reports by database/commit_id
     az storage blob upload-batch \
       --account-name $STORAGE_ACCOUNT \
       --destination security-reports/database/$COMMIT_ID \

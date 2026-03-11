@@ -75,4 +75,19 @@ resource "azurerm_application_gateway" "appgw" {
   tags = merge(var.tags, {
     Name = var.name
   })
+
+  # Prevent Terraform from reverting AGIC-managed configurations
+  lifecycle {
+    ignore_changes = [
+      backend_address_pool,
+      backend_http_settings,
+      http_listener,
+      request_routing_rule,
+      probe,
+      url_path_map,
+      redirect_configuration,
+      frontend_port,
+      tags,
+    ]
+  }
 }

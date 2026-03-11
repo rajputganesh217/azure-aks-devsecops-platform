@@ -47,3 +47,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "csi_identity_object_id" {
+  description = "Object ID of the AKS CSI Secrets Provider identity for Key Vault access"
+  type        = string
+  default     = ""
+}

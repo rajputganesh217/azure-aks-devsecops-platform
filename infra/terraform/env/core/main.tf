@@ -127,6 +127,8 @@ module "keyvault" {
   resource_group_name = module.rg.rg_name
   tenant_id           = data.azurerm_client_config.current.tenant_id
 
+  csi_identity_object_id = module.aks.key_vault_secrets_provider_identity_object_id
+
   postgres_db       = var.postgres_db
   postgres_user     = var.postgres_user
   postgres_password = var.postgres_password

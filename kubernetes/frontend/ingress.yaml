@@ -3,7 +3,6 @@ kind: Ingress
 metadata:
   name: shoe-ingress
   annotations:
-    # REMOVE THIS LINE: kubernetes.io/ingress.class: azure/application-gateway
     appgw.ingress.kubernetes.io/appgw-ssl-certificate: "dev-microservices-cert"
     appgw.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
