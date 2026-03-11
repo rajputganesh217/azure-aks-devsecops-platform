@@ -1,5 +1,5 @@
 
-resource_group_name = "aks-microservices-rg"
+resource_group_name = "aks-microservices-dev-rg"
 location            = "eastus"
 
 aks_name   = "microservices-aks"
