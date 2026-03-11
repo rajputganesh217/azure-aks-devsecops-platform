@@ -175,7 +175,7 @@ module "jump_server" {
   subnet_id           = module.vnet.app_subnet_ids["subnet-private-app-az1"]
   vm_size             = var.jump_server_vm_size
   admin_username      = var.jump_admin_username
-  ssh_public_key      = tls_private_key.jump_ssh.public_key_openssh
+  ssh_public_key      = var.jump_ssh_public_key != null ? var.jump_ssh_public_key : tls_private_key.jump_ssh.public_key_openssh
 
   aks_name = var.aks_name
   acr_name = var.acr_name
