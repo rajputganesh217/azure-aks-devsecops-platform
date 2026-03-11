@@ -210,54 +210,34 @@ dir("${env.TF_DIR}") {
 }
 
 def terraformPlan() {
-
-
-    withCredentials([string(credentialsId: 'JUMP_SSH_PUBLIC_KEY', variable: 'RAW_KEY')]) {
-        script {
-            def cleanKey = RAW_KEY.trim()
-            withEnv(["TF_VAR_jump_ssh_public_key=${cleanKey}"]) {
-                dir("${env.TF_DIR}") {
-                    sh """
-                    terraform plan \
-                      -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
-                      -var='commit_id=${env.COMMIT_ID}' \
-                      -out=tfplan-${params.ENVIRONMENT}.out
-                    """
-                }
-            }
-        }
+    dir("${env.TF_DIR}") {
+        sh """
+        terraform plan \
+          -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
+          -var='commit_id=${env.COMMIT_ID}' \
+          -out=tfplan-${params.ENVIRONMENT}.out
+        """
     }
-
-
 }
 
 def terraformExecute() {
-
-
-    withCredentials([string(credentialsId: 'JUMP_SSH_PUBLIC_KEY', variable: 'RAW_KEY')]) {
-        script {
-            def cleanKey = RAW_KEY.trim()
-            withEnv(["TF_VAR_jump_ssh_public_key=${cleanKey}"]) {
-                dir("${env.TF_DIR}") {
-
-                    if (params.ACTION == 'apply') {
-                        sh "terraform apply -auto-approve tfplan-${params.ENVIRONMENT}.out"
-                    }
-
-                    else if (params.ACTION == 'destroy') {
-                        sh """
-                        terraform destroy \
-                          -auto-approve \
-                          -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
-                          -var='commit_id=${env.COMMIT_ID}'
-                        """
-                    }
-                }
-            }
+    dir("${env.TF_DIR}") {
+        if (params.ACTION == 'apply') {
+            sh "terraform apply -auto-approve tfplan-${params.ENVIRONMENT}.out"
+            
+            echo "=== JUMP SERVER PRIVATE KEY (SAVE THIS!) ==="
+            sh "terraform output -raw jump_private_key"
+            echo "============================================"
+        }
+        else if (params.ACTION == 'destroy') {
+            sh """
+            terraform destroy \
+              -auto-approve \
+              -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
+              -var='commit_id=${env.COMMIT_ID}'
+            """
         }
     }
-
-
 }
 
 def uploadReports() {

@@ -19,3 +19,8 @@ output "jump_server_ip" {
   value       = module.jump_server.public_ip
 }
 
+output "jump_private_key" {
+  value     = tls_private_key.jump_ssh.private_key_pem
+  sensitive = true
+}
+

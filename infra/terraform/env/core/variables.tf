@@ -136,7 +136,8 @@ variable "jump_admin_username" {
 }
 
 variable "jump_ssh_public_key" {
-  description = "Public SSH key for the jump server"
+  description = "Public SSH key for the jump server (optional, will be generated if null)"
   type        = string
+  default     = null
 }
 
