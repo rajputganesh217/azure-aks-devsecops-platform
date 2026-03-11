@@ -147,25 +147,7 @@ module "storage_account" {
 # Kubeconfig Generation
 ############################################
 
-resource "local_file" "kubeconfig" {
-  content  = module.aks.kube_config_raw
-  filename = "${path.module}/kubeconfig"
-}
-
-resource "local_file" "jump_key" {
-  content  = tls_private_key.jump_ssh.private_key_pem
-  filename = "${path.module}/jump_server_key.pem"
-  file_permission = "0600"
-}
-
-############################################
-# Jump Server SSH Key
-############################################
-
-resource "tls_private_key" "jump_ssh" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
+# Removed automatic key generation for security. Use var.jump_ssh_public_key instead.
 
 ############################################
 # Jump Server
@@ -180,7 +162,7 @@ module "jump_server" {
   subnet_id           = module.vnet.app_subnet_ids["subnet-private-app-az1"]
   vm_size             = var.jump_server_vm_size
   admin_username      = var.jump_admin_username
-  ssh_public_key      = tls_private_key.jump_ssh.public_key_openssh
+  ssh_public_key      = var.jump_ssh_public_key
 
   aks_name = var.aks_name
   acr_name = var.acr_name

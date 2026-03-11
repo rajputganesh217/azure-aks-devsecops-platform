@@ -28,6 +28,7 @@ environment {
     TF_VAR_postgres_db       = credentials('POSTGRES_DB')
     TF_VAR_postgres_user     = credentials('POSTGRES_USER')
     TF_VAR_postgres_password = credentials('POSTGRES_PASSWORD')
+    TF_VAR_jump_ssh_public_key = credentials('JUMP_SSH_PUBLIC_KEY')
 }
 
 stages {

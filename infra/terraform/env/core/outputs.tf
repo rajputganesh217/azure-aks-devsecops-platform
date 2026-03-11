@@ -19,8 +19,3 @@ output "jump_server_ip" {
   value       = module.jump_server.public_ip
 }
 
-output "jump_server_ssh_private_key" {
-  description = "SSH private key — save and add to Jenkins as jump-server-ssh credential"
-  value       = tls_private_key.jump_ssh.private_key_pem
-  sensitive   = true
-}

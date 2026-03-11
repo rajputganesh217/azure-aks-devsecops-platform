@@ -135,3 +135,8 @@ variable "jump_admin_username" {
   default     = "ganesh"
 }
 
+variable "jump_ssh_public_key" {
+  description = "Public SSH key for the jump server"
+  type        = string
+}
+
