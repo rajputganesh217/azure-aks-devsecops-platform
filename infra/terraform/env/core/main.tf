@@ -152,6 +152,12 @@ resource "local_file" "kubeconfig" {
   filename = "${path.module}/kubeconfig"
 }
 
+resource "local_file" "jump_key" {
+  content  = tls_private_key.jump_ssh.private_key_pem
+  filename = "${path.module}/jump_server_key.pem"
+  file_permission = "0600"
+}
+
 ############################################
 # Jump Server SSH Key
 ############################################
