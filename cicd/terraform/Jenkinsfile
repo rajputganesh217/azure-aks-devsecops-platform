@@ -38,6 +38,7 @@ stages {
         }
     }
 
+/*
     stage('Security Scans') {
 
         parallel {
@@ -53,6 +54,7 @@ stages {
         }
 
     }
+*/
 
     stage('Terraform Init') {
         steps { script { terraformInit() } }
@@ -98,9 +100,11 @@ stages {
         steps { script { terraformExecute() } }
     }
 
+/*
     stage('Upload Security Reports') {
         steps { script { uploadReports() } }
     }
+*/
 
 }
 

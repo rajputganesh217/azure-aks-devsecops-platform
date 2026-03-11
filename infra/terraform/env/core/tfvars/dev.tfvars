@@ -6,7 +6,7 @@ aks_name   = "microservices-aks"
 dns_prefix = "microaks"
 
 node_count = 1
-vm_size    = "Standard_D4s_v5"
+vm_size    = "Standard_B2s"
 
 acr_name = "mydevopsacr123"
 
@@ -30,5 +30,5 @@ db_subnets = {
   "subnet-private-db-az3" = "10.1.22.0/24"
 }
 
-jump_server_vm_size = "Standard_D2s_v3"
+jump_server_vm_size = "Standard_B2s"
 jump_admin_username = "ganesh"
