@@ -16,6 +16,40 @@ spec:
       - name: worker
         image: mydevopsacr123.azurecr.io/worker:latest
         imagePullPolicy: Always
+        
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+              - ALL
+
+        livenessProbe:
+          exec:
+            command:
+              - pgrep
+              - -f
+              - worker.py
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        
+        readinessProbe:
+          exec:
+            command:
+              - pgrep
+              - -f
+              - worker.py
+          initialDelaySeconds: 5
+          periodSeconds: 10
 
         env:
           - name: DB_HOST
