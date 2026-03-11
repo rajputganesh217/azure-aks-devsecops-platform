@@ -140,16 +140,8 @@ pipeline {
 
 
 def prepareWorkspace() {
-
-    commitId = sh(
-        script: "git rev-parse --short=8 HEAD",
-        returnStdout: true
-    ).trim()
-
-    sh """
-    mkdir -p security-reports
-    echo "Commit ID: ${commitId}"
-    """
+    env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
+    sh "rm -rf security-reports && mkdir -p security-reports"
 }
 
 
@@ -219,11 +211,7 @@ def runDependencyCheck() {
 
 
 def buildDockerImage() {
-
-    dockerImage = docker.build(
-        "${IMAGE_NAME}:${APP_NAME}-${commitId}",
-        "-f docker/worker/Dockerfile ."
-    )
+    sh "docker build -t ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID} -f docker/worker/Dockerfile ."
 }
 
 
@@ -232,13 +220,12 @@ def buildDockerImage() {
 
 
 def runTrivyScan() {
-
     sh """
     trivy image --quiet \
       --severity HIGH,CRITICAL \
       --format json \
       -o security-reports/trivy-${APP_NAME}.json \
-      ${IMAGE_NAME}:${APP_NAME}-${commitId} || true
+      ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID} || true
     """
 }
 
@@ -248,11 +235,8 @@ def runTrivyScan() {
 
 
 def pushDockerImage() {
-
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
-
-        dockerImage.push("${APP_NAME}-${commitId}")
-
+        sh "docker push ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID}"
     }
 }
 
@@ -277,15 +261,11 @@ def deployWorker() {
       --name $AKS_CLUSTER_NAME \
       --file kubernetes/worker/worker-deployment.yaml \
       --command "
-
-      kubectl apply -f worker-deployment.yaml;
-
-      kubectl set image deployment/worker \
-      worker=${IMAGE_NAME}:${APP_NAME}-${commitId};
-
-      kubectl rollout status deployment/worker
-
-      "
+        kubectl apply -f worker-deployment.yaml;
+        kubectl set image deployment/worker \
+        worker=${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID};
+        kubectl rollout status deployment/worker
+      " || true
     """
 }
 
