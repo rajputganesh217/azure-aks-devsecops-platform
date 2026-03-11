@@ -251,7 +251,7 @@ def deployToAKS() {
     az account set --subscription $AZURE_SUBSCRIPTION_ID
 
     sh """
-        # Dynamically update the image tag in the deployment manifest
+    
         sed -i "s|image:.*|image: ${IMAGE_NAME}:${APP_NAME}-${env.COMMIT_ID}|g" kubernetes/backend/backend-deployment.yaml
     """
 
