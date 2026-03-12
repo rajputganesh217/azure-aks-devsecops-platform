@@ -62,6 +62,18 @@ resource "azurerm_network_security_group" "public_nsg" {
     destination_address_prefix = "*"
   }
 
+  security_rule {
+    name                       = "AllowSSHInbound"
+    priority                   = 130
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
   tags = merge(var.tags, {
     Name = "${var.vnet_name}-public-nsg"
   })

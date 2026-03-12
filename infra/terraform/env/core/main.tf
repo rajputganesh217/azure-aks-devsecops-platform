@@ -153,7 +153,7 @@ module "jump_server" {
   name                = var.jump_server_name
   location            = var.location
   resource_group_name = data.azurerm_resource_group.rg.name
-  subnet_id           = module.vnet.app_subnet_ids["subnet-private-app-az1"]
+  subnet_id           = module.vnet.public_subnet_ids["subnet-public-az1"]
   vm_size             = var.jump_server_vm_size
   admin_username      = var.jump_admin_username
   ssh_public_key      = var.ssh_public_key
