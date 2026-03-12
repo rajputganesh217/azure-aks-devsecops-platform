@@ -119,4 +119,26 @@ variable "cost_center" {
   default = "CC1001"
 }
 
+############################################
+# Jump Server Configuration
+############################################
 
+variable "jump_server_name" {
+  type    = string
+  default = "devops-jump-server"
+}
+
+variable "jump_server_vm_size" {
+  type    = string
+  default = "Standard_D2s_v3"
+}
+
+variable "jump_admin_username" {
+  type    = string
+  default = "ganesh"
+}
+
+variable "ssh_public_key" {
+  type        = string
+  description = "SSH public key content for the jump server"
+}
