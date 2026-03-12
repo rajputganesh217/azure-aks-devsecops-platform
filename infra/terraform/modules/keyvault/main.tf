@@ -21,12 +21,27 @@ resource "azurerm_key_vault" "kv" {
 
 data "azurerm_client_config" "current" {}
 
+############################################
+# SP Admin Role — must exist BEFORE secrets
+############################################
 
+# Grant the Terraform SP full admin access to the Key Vault
+resource "azurerm_role_assignment" "kv_admin" {
+  scope                = azurerm_key_vault.kv.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+# Azure RBAC takes 30-60 seconds to propagate globally.
+# Without this wait the secret create calls get 403 Forbidden.
+resource "time_sleep" "wait_for_kv_rbac" {
+  depends_on      = [azurerm_role_assignment.kv_admin]
+  create_duration = "60s"
+}
 
 ############################################
 # Store App Secrets
-# NOTE: depends_on kv_admin_role_id ensures secrets are destroyed BEFORE the role
-# assignment, preventing 403 Forbidden errors during terraform destroy.
+# NOTE: depends_on time_sleep ensures RBAC propagation is complete.
 ############################################
 
 resource "azurerm_key_vault_secret" "postgres_db" {
@@ -35,7 +50,7 @@ resource "azurerm_key_vault_secret" "postgres_db" {
   value        = var.postgres_db
   key_vault_id = azurerm_key_vault.kv.id
 
-  depends_on = [azurerm_key_vault.kv]
+  depends_on = [time_sleep.wait_for_kv_rbac]
 
   lifecycle {
     ignore_changes = [value]
@@ -48,7 +63,7 @@ resource "azurerm_key_vault_secret" "postgres_user" {
   value        = var.postgres_user
   key_vault_id = azurerm_key_vault.kv.id
 
-  depends_on = [azurerm_key_vault.kv]
+  depends_on = [time_sleep.wait_for_kv_rbac]
 
   lifecycle {
     ignore_changes = [value]
@@ -61,7 +76,7 @@ resource "azurerm_key_vault_secret" "postgres_password" {
   value        = var.postgres_password
   key_vault_id = azurerm_key_vault.kv.id
 
-  depends_on = [azurerm_key_vault.kv]
+  depends_on = [time_sleep.wait_for_kv_rbac]
 
   lifecycle {
     ignore_changes = [value]
@@ -74,7 +89,7 @@ resource "azurerm_key_vault_secret" "db_host" {
   value        = var.db_host
   key_vault_id = azurerm_key_vault.kv.id
 
-  depends_on = [azurerm_key_vault.kv]
+  depends_on = [time_sleep.wait_for_kv_rbac]
 
   lifecycle {
     ignore_changes = [value]
