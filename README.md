@@ -1,227 +1,155 @@
-# Azure DevSecOps Kubernetes Platform
+# Enterprise Azure DevSecOps Kubernetes Platform
 
-Hey everyone. This is a DevSecOps project I built to show how to deploy a standard microservices app to Azure AKS securely. It uses Jenkins for CI/CD, Terraform for the infrastructure, and integrates security scanning at every step of the pipeline.
+Welcome to the Enterprise Azure DevSecOps Platform. This project demonstrates a production-ready, fully automated DevSecOps pipeline deploying a microservices application to Azure Kubernetes Service (AKS). It uses Jenkins for CI/CD, Terraform for immutable Infrastructure as Code, and integrates rigorous security scanning at every step of the software development lifecycle.
 
-The main idea here is to not just push code, but to make sure it's actually secure before it ever hits the cluster. We do secret scanning, static code analysis, library checks, and container scanning in the pipeline before the image even gets to Azure.
-
-## Architecture Overview
-
-This platform demonstrates a secure DevSecOps pipeline deploying a microservices application to Azure Kubernetes Service.
-
-The architecture consists of:
-- Jenkins-driven CI/CD pipelines
-- Multi-stage security scanning
-- Containerized microservices deployed to AKS
-- Azure Container Registry for image storage
-- Azure Blob Storage for security audit reports
-- Network isolation using a tiered Azure Virtual Network
-
-## Project Highlights
-
-- Fully automated DevSecOps pipeline on Azure AKS
-- Integrated security scanning across code, dependencies, containers, and infrastructure
-- Terraform-based Infrastructure as Code for reproducible environments
-- Secure container delivery using Azure Container Registry
-- Network isolation using Azure VNet and NSGs
-- Security report archiving to Azure Blob Storage for auditability
+The primary objective of this platform is to enforce a "Secure by Default" and "Shift Left" mentality. We guarantee that code is structurally secure, free of leaked secrets, dependencies are patched, and containers are scanned for vulnerabilities before they are ever allowed to execute in the Azure cloud.
 
 ---
 
-## Getting Started
+## 1. Architecture Overview
 
-If you want to spin this up yourself, here is how.
+This platform dynamically provisions a secure, tiered Azure environment using Terraform, and deploys applications using a zero-downtime, automated footprint.
 
-### What You Need
+### Core Ecosystem Components:
+- **Continuous Integration/Continuous Deployment (CI/CD):** Jenkins multi-branch pipelines
+- **Infrastructure as Code (IaC):** Terraform with state management in Azure Storage
+- **Container Orchestration:** Azure Kubernetes Service (AKS)
+- **Ingress Controller:** Azure Application Gateway (WAF-enabled) via AGIC (Application Gateway Ingress Controller)
+- **Image Registry:** Azure Container Registry (ACR) secured via Managed Identities
+- **Secrets Management:** Azure Key Vault for dynamic, zero-trust credential injection
+- **Network Isolation:** Tiered Azure Virtual Networks (VNet) with stringent Network Security Groups (NSGs)
 
-* An **Azure Account** with permissions to create stuff (Resource Groups, Service Principals).
-* A **Jenkins Server**. You can run this locally or in the cloud. You'll need plugins like Pipeline, Docker, and SonarQube Scanner.
-* Put these tools on your Jenkins agent: `terraform`, `az`, `docker`, `trivy`, `checkov`, `gitleaks`, `dependency-check`.
-* A **SonarQube Server** running somewhere that Jenkins can reach.
+---
 
-### How to Run It
+## 2. Platform Highlights & Recent Upgrades
 
-1. **Clone it:**
+- **Fully Automated DevSecOps Pipeline:** Commits trigger automated scanning, building, and deployment across Dev, QA, UAT, and Prod.
+- **Eternal Static IPs:** Terraform managed automated creation (via Azure CLI) of Static Public IPs for the App Gateway and Jump Server, allowing the underlying infrastructure to be destroyed and recreated blindly while maintaining absolute DNS stability.
+- **Service Principal Authentication:** Transitioned from fragile docker-login credentials to robust Azure Service Principal authentication (`az acr login`) for pushing and pulling Docker images.
+- **Cost-Optimized "Lean" Workloads:** Microservice resource constraints heavily optimized (10m-20m CPU, 32Mi-64Mi Memory limits) to allow dense multi-environment deployment on single, cost-effective AKS nodes.
+- **Auto-Fallbacks for Promotion:** Pipelines default to the latest verified `dev` image for promotion if a specific Commit ID is omitted for QA/UAT/Prod environments.
+- **Key Vault RBAC Stabilization:** Implemented deterministic `time_sleep` dependencies to ensure Azure RBAC propagates accurately before Key Vault secrets are injected, preventing 403 Forbidden race conditions.
+
+---
+
+## 3. Getting Started & Setup Guide
+
+### Prerequisites
+
+1. An **Azure Account** with sufficient privileges (Subscription Owner or Contributor + User Access Administrator).
+2. A **Jenkins Server** (running locally or in the cloud) equipped with `git`, `docker`, `terraform`, `az cli`, `trivy`, `checkov`, `gitleaks`, and `dependency-check`.
+3. A **SonarQube Server** accessible by Jenkins.
+
+### Step-by-Step Deployment
+
+1. **Clone the Repository:**
    ```bash
    git clone https://github.com/rajputganesh217/azure-aks-devsecops-platform.git
    cd azure-aks-devsecops-platform
    ```
 
-2. **Jump Server Setup (Prerequisites):**
-   This project uses a Jump Server (Bastion) to securely deploy to AKS. 
-   - Create a Linux Virtual Machine in the same VNet as AKS (or with VNet peering).
-   - Install `kubectl` and `docker` on the Jump Server.
-   - Ensure the Jenkins agent has SSH access to the Jump Server.
-   - Add the following credentials to Jenkins:
-     - `jump-server-ssh`: SSH Private Key for the Jump Server.
-     - `JUMP_SERVER_IP`: Public or Private IP of the Jump Server.
+2. **Configure Jenkins Credentials:**
+   Navigate to *Manage Jenkins -> Credentials* and add the following as `Secret text`:
+   - **Azure Credentials:** `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`.
+   - **Database Credentials:** `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`.
+   - **API Keys:** `sonar-token`, `NVD_API_KEY`.
+   - **Networking:** `JUMP_SERVER_IP` (You will update this after Terraform runs).
 
-3. **Set up your Jenkins Credentials:**
-   Go to Manage Jenkins -> Credentials and add these as Secret Texts:
-   * **Azure credentials**: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`. (Also add them as `ARM_...` for Terraform to pick them up).
-   * **Database credentials**: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`.
-   * **API Keys**: `sonar-token`, `NVD_API_KEY`, `azure-acr-credentials`.
-   * **Networking**: `JUMP_SERVER_IP`.
+3. **Deploy Infrastructure (Terraform):**
+   - Run the `cicd/terraform/Jenkinsfile` pipeline in Jenkins.
+   - Wait ~12 minutes for Azure network, AKS, App Gateway, Key Vault, and ACR to provision.
+   - *Post-Provisioning:* Retrieve the new Jump Server Public IP from the Azure Portal and update your `JUMP_SERVER_IP` Jenkins credential. Update your local `/etc/hosts` file to point `microservices.local` domains to the new Application Gateway Public IP.
 
-4. **Run the Pipelines:**
-   You have to run these in order the first time:
-
-   * First, run `cicd/terraform/Jenkinsfile`. (Sets up the VNet, AKS, and ACR).
-   * Second, run `cicd/database/Jenkinsfile`. (Sets up the database and project secrets).
-   * Third, run `cicd/backend/Jenkinsfile` (Environment: `dev`).
-   * Fourth, run `cicd/worker/Jenkinsfile` (Environment: `dev`).
-   * Fifth, run `cicd/frontend/Jenkinsfile` (Environment: `dev`).
-
-Wait a few minutes after the frontend pipeline finishes, run `kubectl get svc shoe-frontend` to grab your public IP, and you're good to go!
+4. **Deploy Applications:**
+   Execute these pipelines sequentially for the `dev` environment:
+   - `cicd/database/Jenkinsfile` *(IMPORTANT: Check the `GENERATE_SECRET` box on this initial run!)*
+   - `cicd/backend/Jenkinsfile`
+   - `cicd/worker/Jenkinsfile`
+   - `cicd/frontend/Jenkinsfile`
 
 ---
 
-## 1. Image Tagging & Promotion Strategy
+## 4. Architecture Flow & Network Layout
 
-We follow a standardized tagging convention and a multi-environment promotion strategy to ensure reliability.
-
-### Tagging Convention
-Images are tagged in the format: `{service-name}-{environment}-{8-digit-commit-hash}`
-Example: `frontend-dev-abcdef12`
-
-### Promotion Flow
-1. **DEV**: Developers push code, triggered by a webhook. Images are built and tagged for `dev`.
-2. **QA**: Triggered manually from the pipeline with a `PROMOTE_COMMIT_ID`. It pulls the `dev` tag, retags it for `qa`, and deploys.
-3. **UAT/PROD**: Follows the same pattern, pulling from the previous environment's tag (`qa` -> `uat` -> `prod`).
-
-This ensures that the exact same image that was tested in QA is promoted to Production.
-
----
-
-## 2. CI/CD Pipeline Flow
-
-Here is what happens when code gets pushed. We use Jenkins declarative pipelines to run everything via a **Jump Server** for secure cluster access.
-
-```mermaid
-flowchart TD
-    Devs("Developers") -->|1. Git Push| GitHub("GitHub Repo")
-    GitHub -->|2. Webhook| Jenkins{"Jenkins CI/CD"}
-    
-    subgraph Scans ["Security Gates"]
-        direction LR
-        Gitleaks("Gitleaks (Secrets)")
-        Sonar("SonarQube (SAST)")
-        DepCheck("Dependency-Check (SCA)")
-    end
-    
-    Jenkins ==>|3. Run Scans| Scans
-    Jenkins ==>|4. Docker Build| DockerBuild("Docker Build")
-    DockerBuild ==>|5. Push Image| ACR("Azure Container Registry")
-    Jenkins ==>|6. Deploy| Jump("Jump Server")
-    Jump ==>|7. Kubectl Apply| AKS("AKS Cluster")
-    ACR -.->|8. AKS Pulls Image| AKS
-```
-
-1. **Scans**: We scan for secrets, code quality, and dependency vulnerabilities.
-2. **Build**: Docker image is built and tagged with the standardized format.
-3. **Push**: Image is pushed to Azure Container Registry.
-4. **Deploy**: Jenkins connects to a **Jump Server** via SSH.
-5. **Update**: The Jump Server executes `kubectl` commands to update the AKS deployment using the new image tag.
-
-
-1. **Scans**: We scan the code for hardcoded secrets (`Gitleaks`), bad dependencies (`Dependency-Check`), and code quality (`SonarQube`).
-2. **Build**: Docker image is built and tagged using the `service-env-hash` format.
-3. **Push**: Image is pushed to Azure Container Registry (ACR).
-4. **Deploy**: Jenkins connects to the **Jump Server** and executes the deployment.
-5. **Verify**: AKS pulls the new image from ACR and updates the pods.
-
----
-
-## 2. Infrastructure Architecture
-
-I used Terraform to stand up the Azure networking and clustering. I kept the PaaS stuff outside the VNet and locked down the subnets inside the VNet.
+### Infrastructure Layout
 
 ```mermaid
 flowchart TD
     subgraph PaaS ["Azure PaaS"]
         direction LR
-        ACR("Container Registry")
-        Blob("Blob Storage")
+        ACR("Azure Container Registry")
+        KV("Azure Key Vault")
+        Blob("Blob Storage (Audit Reports)")
     end
 
     subgraph Azure ["Azure Cloud"]
         direction TB
-        ALB["Load Balancer (Public IP)"]
+        AppGW["Application Gateway (WAF & Ingress)"]
         
         subgraph VNet ["Tiered Virtual Network"]
             direction TB
-            subgraph AppSubnet ["App Subnet"]
+            subgraph AppSubnet ["AKS Subnet"]
                 AKS("AKS Private Cluster")
             end
             
-            subgraph DBSubnet ["Database Subnet (Reserved)"]
-                FutureDB("Future: Managed Postgres")
+            subgraph JumpSubnet ["Jump Server Subnet"]
+                JumpServer("Jump Server (Bastion)")
             end
         end
     end
 
-    Users("Users") ===>|Port 80| ALB
-    ALB ===>|Traffic Routing| AKS
-    PaaS -.->|Images & Reports| AKS
+    Users("Users") ===>|Port 80/443| AppGW
+    AppGW ===>|HTTP Routing via AGIC| AKS
+    PaaS -.->|Images, Secrets, Reports| AKS
+    Jenkins("Jenkins") -.->|SSH| JumpServer
+    JumpServer -.->|Kubectl Admin| AKS
 ```
 
-* **Public Exposure:** Azure LoadBalancer created by AKS provides the public entry point.
-* **App Subnet:** Where the actual AKS worker nodes live. No direct internet access allowed. Standard NSG isolation blocks it off. We explicitly allow the Azure Loadbalancer health probes to talk to the NodePorts.
-* **DB Subnet:** Empty for now, but reserved for a future managed Azure DB instance.
+### Application Traffic Flow
+1. User requests `frontend.microservices.local`.
+2. Traffic reaches the **Azure Application Gateway** (configured with a static Public IP).
+3. The **AGIC (Application Gateway Ingress Controller)** routes traffic internally into the AKS `frontend` pods based on Kubernetes Ingress rules.
+4. The `frontend` pods communicate internally to the `backend` Python API via Kubernetes ClusterIP.
+5. The `backend` queries the isolated `PostgreSQL` Database Pod and occasionally dispatches async jobs to the `worker` pods.
 
 ---
 
-## 3. Kubernetes Setup
+## 5. DevSecOps CI/CD Pipeline
 
-Inside the cluster, here is how the workloads are laid out. The key thing here is that the database is running as a pod strictly internally, meaning you can't hit it from the internet at all.
+The Jenkins CI/CD process guarantees structural integrity and pristine application security.
 
-```mermaid
-flowchart TD
-    subgraph Azure ["Azure"]
-        ALB["Azure Load Balancer"]
-        ACR("Container Registry")
-    end
-
-    subgraph AKS ["AKS Cluster Workloads"]
-        direction TB
-        Front("Frontend Deployment (2 pods)")
-        Back("Backend API (2 pods)")
-        Worker("Worker (1 pod)")
-        DB[("PostgreSQL Pod")]
-        
-        ALB ===>|Port 80| Front
-        Front <-->|ClusterIP: shoe-backend| Back
-        Back <-->|ClusterIP: postgres| DB
-        Back -.->|Async Queue| Worker
-    end
-
-    Users("Users") ===> ALB
-    ACR -.->|Pulls Image| AKS
-```
+1. **SCM Checkout & Environment Setup:** Pulls the repository and generates a tracking Commit ID.
+2. **Security Scans (Parallel execution):**
+   - **Gitleaks:** Scans the repository for hardcoded AWS keys, Azure tokens, or passwords.
+   - **Dependency-Check:** Analyzes the `requirements.txt` or `package.json` against the NVD database for known CVEs.
+   - **Checkov (Infra):** Scans Terraform explicitly for cloud misconfigurations.
+   - **SonarQube (App):** Enforces high code quality and strict test coverage.
+3. **Docker Build & Image Scan:**
+   - Packages the app.
+   - **Trivy:** Analyzes the actual Docker filesystem and OS layers for severe vulnerabilities. Stops the build if critical CVEs are present.
+4. **Push to Registry:**
+   - Authenticates using Azure Service Principal.
+   - Pushes securely to Azure Container Registry (ACR).
+5. **Continuous Deployment (CD):**
+   - Connects to the isolated Jump Server via SSH.
+   - Patches the Kubernetes manifests with the exact newly generated image tag.
+   - Applies the changes to the AKS cluster seamlessly.
+6. **Audit Upload:**
+   - Uploads all generated security JSON/HTML reports directly to a secure Azure Blob Storage container (`devdevsecopsrep`) for compliance auditing.
 
 ---
 
-## Key Security Practices
+## 6. Promotion Strategy
 
-* **No Hardcoded Secrets:** Password and keys are pulled directly from Jenkins at runtime.
-* **RBAC:** We use a Terraform Service Principal that only has exactly the permissions it needs (like `Storage Blob Data Contributor` for saving reports).
-* **Managed Identities:** AKS nodes use managed identities to authenticate with Azure Container Registry. No docker login passwords hanging around.
-* **Network Security Groups:** Traffic is strictly controlled between subnets.
-* **Shift Left:** Code goes through 5 different security tools before it's allowed to run.
+Images are exclusively built in the `dev` pipeline to ensure artifacts are fully immutable.
+- **Format:** `{service-name}-{environment}-{commit-hash}` (e.g. `frontend-dev-7bd38a95`)
+- When promoting to `QA`, Jenkins dynamically pulls the exact `dev` image from ACR, re-tags it for `QA`, and deploys it to the `qa` Kubernetes namespace.
+- This guarantees "What was tested in Dev is EXACTLY what runs in Production."
 
-## Stack Summary
+---
 
-* **Cloud:** Azure
-* **Infrastructure:** Terraform
-* **Orchestration:** Azure Kubernetes Service (AKS)
-* **Storage:** Azure Container Registry (ACR), Azure Blob Storage, Azure Log Analytics
-* **CI/CD:** Jenkins, Git
-* **Security Scanners:** SonarQube, OWASP Dependency-Check, Gitleaks, Trivy, Checkov
-* **Database:** PostgreSQL
+## 7. Security Deep Dive
 
-## What's Next?
-
-If I were moving this into a real production environment, I'd probably add:
-* **ZAP (DAST):** Run a dynamic application scan against the load balancer URL right after deployment.
-* **Azure API Management:** Stick APIM in front of the cluster to handle rate limiting and OAuth.
-* **External Secrets:** Move away from Jenkins injecting secrets and use the Azure Key Vault CSI driver so pods can mount secrets straight from the vault.
-* **Managed DB:** Move Postgres out of a kubernetes pod and into a proper Azure Database for PostgreSQL.
+- **Zero Trust Secrets:** Applications do not hold passwords. Jenkins/Terraform leverages Azure Key Vault to generate passwords dynamically. The AKS CSI Driver safely mounts these secrets.
+- **Roles Based Access Control (RBAC):** Every component operates on Least Privilege. Jenkins utilizes a Service Principal (`AcrPush` role). The AKS nodes utilize a Managed Identity (`AcrPull` and `Key Vault Secrets User`).
+- **Network Isolation:** Operations (Jump Server), Web Traffic (App Gateway), and Workloads (AKS) reside in stringently separated Azure subnets, bound by exact NSG rules tracking inbound/outbound parity.
