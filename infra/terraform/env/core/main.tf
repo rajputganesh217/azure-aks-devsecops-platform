@@ -159,7 +159,7 @@ module "jump_server" {
   ssh_public_key      = var.ssh_public_key
   
   aks_name = module.aks.cluster_name
-  acr_name = module.acr.acr_name
+  acr_name = var.acr_name
   
   tags = module.tags.tags
 }
