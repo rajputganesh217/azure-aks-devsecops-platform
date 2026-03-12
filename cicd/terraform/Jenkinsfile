@@ -56,9 +56,6 @@ stages {
 
 
     stage('Prepare Static IPs') {
-        when {
-            expression { params.ACTION != 'destroy' }
-        }
         steps { script { prepareStaticIPs() } }
     }
 
