@@ -1,8 +1,4 @@
-resource "random_string" "suffix" {
-  length  = 5
-  special = false
-  upper   = false
-}
+# Random string removed — using environment name for stable, predictable naming
 
 data "azurerm_client_config" "current" {}
 
@@ -48,7 +44,7 @@ module "vnet" {
 
   resource_group_name = data.azurerm_resource_group.rg.name
   location            = var.location
-  vnet_name           = "${var.environment}-devsecops-vnet-${random_string.suffix.result}"
+  vnet_name           = "${var.environment}-devsecops-vnet"
 
   vnet_address_space = var.vnet_address_space
   public_subnets     = var.public_subnets
@@ -77,7 +73,7 @@ module "acr" {
 module "app_gateway" {
   source = "../../modules/app-gateway"
 
-  name                = "appgw-${random_string.suffix.result}"
+  name                = "${var.environment}-appgw"
   location            = var.location
   resource_group_name = data.azurerm_resource_group.rg.name
 
@@ -116,7 +112,7 @@ module "aks" {
 module "keyvault" {
   source = "../../modules/keyvault"
 
-  keyvault_name       = "devsecops-kv-${random_string.suffix.result}"
+  keyvault_name       = "${var.environment}-devsecops-kv"
   location            = var.location
   resource_group_name = data.azurerm_resource_group.rg.name
   tenant_id           = data.azurerm_client_config.current.tenant_id
@@ -137,7 +133,7 @@ module "keyvault" {
 module "storage_account" {
   source = "../../modules/storage-account"
 
-  storage_account_name = "${var.environment}devsecopsrep${random_string.suffix.result}"
+  storage_account_name = "${var.environment}devsecopsrep"
   location             = var.location
   resource_group_name  = data.azurerm_resource_group.rg.name
   tags                 = module.tags.tags
