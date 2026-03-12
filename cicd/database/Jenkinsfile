@@ -84,38 +84,38 @@ pipeline {
 def createSecret() {
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
         sh """
-        ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
             set -ex
-            kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-            kubectl delete secret postgres-secret -n ${NAMESPACE} --ignore-not-found
-            kubectl create secret generic postgres-secret -n ${NAMESPACE} \\
-              --from-literal=POSTGRES_DB=${POSTGRES_DB} \\
-              --from-literal=POSTGRES_USER=${POSTGRES_USER} \\
-              --from-literal=POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            scp -o StrictHostKeyChecking=no -i \${SSH_KEY} ${K8S_DIR}/openssl.cnf ${JUMP_USER}@${JUMP_SERVER_IP}:/tmp/openssl-san.cnf
 
-            # Create TLS secret (self-signed wildcard cert) for HTTPS
-            if [ "${params.FORCE_RECREATE_SECRET}" = "true" ] || ! kubectl get secret microservices-tls-secret -n ${NAMESPACE} > /dev/null 2>&1; then
-                echo "Creating/Updating TLS secret in namespace ${NAMESPACE}..."
+            ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
+                set -ex
+                kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                kubectl delete secret postgres-secret -n ${NAMESPACE} --ignore-not-found
+                kubectl create secret generic postgres-secret -n ${NAMESPACE} \\
+                  --from-literal=POSTGRES_DB=${POSTGRES_DB} \\
+                  --from-literal=POSTGRES_USER=${POSTGRES_USER} \\
+                  --from-literal=POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
                 
-                # Use printf to avoid heredoc indentation issues over SSH
-                printf "[req]\\ndistinguished_name = req_distinguished_name\\nx509_extensions = v3_req\\nprompt = no\\n[req_distinguished_name]\\nCN = *.microservices.local\\n[v3_req]\\nsubjectAltName = DNS:*.microservices.local,DNS:microservices.local\\n" > /tmp/openssl-san.cnf
-
-                kubectl delete secret microservices-tls-secret -n ${NAMESPACE} --ignore-not-found
-                
-                openssl req -x509 -nodes -days 365 -newkey rsa:2048 \\
-                  -keyout /tmp/tls.key \\
-                  -out /tmp/tls.crt \\
-                  -config /tmp/openssl-san.cnf
-                
-                kubectl create secret tls microservices-tls-secret -n ${NAMESPACE} \\
-                  --cert=/tmp/tls.crt --key=/tmp/tls.key
-                
-                echo "TLS secret microservices-tls-secret created successfully."
-                rm -f /tmp/tls.key /tmp/tls.crt /tmp/openssl-san.cnf
-            else
-                echo "TLS secret microservices-tls-secret already exists. Skipping creation."
-            fi
-        "
+                # Create TLS secret (self-signed wildcard cert) for HTTPS
+                if [ \"${params.FORCE_RECREATE_SECRET}\" = \"true\" ] || ! kubectl get secret microservices-tls-secret -n ${NAMESPACE} > /dev/null 2>&1; then
+                    echo \"Creating/Updating TLS secret in namespace ${NAMESPACE}...\"
+                    
+                    kubectl delete secret microservices-tls-secret -n ${NAMESPACE} --ignore-not-found
+                    
+                    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \\
+                      -keyout /tmp/tls.key \\
+                      -out /tmp/tls.crt \\
+                      -config /tmp/openssl-san.cnf
+                    
+                    kubectl create secret tls microservices-tls-secret -n ${NAMESPACE} \\
+                      --cert=/tmp/tls.crt --key=/tmp/tls.key
+                    
+                    echo \"TLS secret microservices-tls-secret created successfully.\"
+                    rm -f /tmp/tls.key /tmp/tls.crt /tmp/openssl-san.cnf
+                else
+                    echo \"TLS secret microservices-tls-secret already exists. Skipping creation.\"
+                fi
+            "
         """
     }
 }
