@@ -3,7 +3,7 @@ pipeline {
 
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['dev','qa','uat','prod'], description: 'Target Environment')
-        booleanParam(name: 'FORCE_RECREATE_SECRET', defaultValue: false, description: 'Force recreate the TLS secret?')
+        booleanParam(name: 'GENERATE_SECRET', defaultValue: false, description: 'Generate/Recreate Secrets (DB & TLS)?')
     }
 
     environment {
@@ -87,14 +87,21 @@ def createSecret() {
             ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
                 set -ex
                 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                kubectl delete secret postgres-secret -n ${NAMESPACE} --ignore-not-found
-                kubectl create secret generic postgres-secret -n ${NAMESPACE} \\
-                  --from-literal=POSTGRES_DB=${POSTGRES_DB} \\
-                  --from-literal=POSTGRES_USER=${POSTGRES_USER} \\
-                  --from-literal=POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+                
+                # Create postgres-secret
+                if [ \"${params.GENERATE_SECRET}\" = \"true\" ] || ! kubectl get secret postgres-secret -n ${NAMESPACE} > /dev/null 2>&1; then
+                    echo \"Creating/Updating postgres-secret in namespace ${NAMESPACE}...\"
+                    kubectl delete secret postgres-secret -n ${NAMESPACE} --ignore-not-found
+                    kubectl create secret generic postgres-secret -n ${NAMESPACE} \\
+                      --from-literal=POSTGRES_DB=${POSTGRES_DB} \\
+                      --from-literal=POSTGRES_USER=${POSTGRES_USER} \\
+                      --from-literal=POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+                else
+                    echo \"postgres-secret already exists. Skipping creation.\"
+                fi
                 
                 # Create TLS secret (self-signed wildcard cert) for HTTPS
-                if [ \"${params.FORCE_RECREATE_SECRET}\" = \"true\" ] || ! kubectl get secret microservices-tls-secret -n ${NAMESPACE} > /dev/null 2>&1; then
+                if [ \"${params.GENERATE_SECRET}\" = \"true\" ] || ! kubectl get secret microservices-tls-secret -n ${NAMESPACE} > /dev/null 2>&1; then
                     echo \"Creating/Updating TLS secret in namespace ${NAMESPACE}...\"
                     
                     kubectl delete secret microservices-tls-secret -n ${NAMESPACE} --ignore-not-found

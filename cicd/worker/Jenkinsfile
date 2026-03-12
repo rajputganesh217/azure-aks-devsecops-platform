@@ -105,11 +105,7 @@ pipeline {
 
 def prepareWorkspace() {
     env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
-    env.DEPLOY_COMMIT = params.ENVIRONMENT == 'dev' ? env.COMMIT_ID : params.PROMOTE_COMMIT_ID
-
-    if (params.ENVIRONMENT != 'dev' && !env.DEPLOY_COMMIT?.trim()) {
-        error "PROMOTE_COMMIT_ID is required for non-dev environments!"
-    }
+    env.DEPLOY_COMMIT = (params.PROMOTE_COMMIT_ID && params.PROMOTE_COMMIT_ID.trim() != '') ? params.PROMOTE_COMMIT_ID : env.COMMIT_ID
 
     // New Tagging Format: service-env-hash
     env.IMAGE_TAG = "${env.IMAGE_NAME}:${env.APP_NAME}-${params.ENVIRONMENT}-${env.DEPLOY_COMMIT}"
