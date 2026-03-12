@@ -20,7 +20,7 @@ pipeline {
         DOCKER_CREDS_ID = "azure-acr-credentials"
         SONAR_PROJECT_KEY = "${APP_NAME}-service"
         SONAR_SERVER_ID   = "sonarqube"
-        STORAGE_ACCOUNT = "devdevsecopsrepwzn1c"
+        STORAGE_ACCOUNT = "devdevsecopsrep"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')

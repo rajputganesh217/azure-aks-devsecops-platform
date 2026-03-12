@@ -15,7 +15,7 @@ pipeline {
         DOCKER_CREDS_ID = "azure-acr-credentials"
         SONAR_PROJECT_KEY = "${APP_NAME}-service"
         SONAR_SERVER_ID   = "sonarqube"
-        STORAGE_ACCOUNT = "devdevsecopsrepwzn1c"
+        STORAGE_ACCOUNT = "devdevsecopsrep"
 
         REGISTRY   = "mydevopsacr123.azurecr.io"
         IMAGE_NAME = "${REGISTRY}/${APP_NAME}"

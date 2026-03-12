@@ -12,7 +12,7 @@ pipeline {
         APP_NAME = "frontend"
         APP_DIR  = "app/${APP_NAME}"
         K8S_DIR  = "kubernetes/${APP_NAME}"
-        STORAGE_ACCOUNT = "devdevsecopsrepwzn1c"
+        STORAGE_ACCOUNT = "devdevsecopsrep"
         DOCKER_CREDS_ID = "azure-acr-credentials"
 
         REGISTRY   = "mydevopsacr123.azurecr.io"

@@ -8,7 +8,7 @@ pipeline {
 
     environment {
         K8S_DIR = "kubernetes/postgres"
-        STORAGE_ACCOUNT = "devdevsecopsrepwzn1c"
+        STORAGE_ACCOUNT = "devdevsecopsrep"
         NAMESPACE = "${params.ENVIRONMENT}"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
