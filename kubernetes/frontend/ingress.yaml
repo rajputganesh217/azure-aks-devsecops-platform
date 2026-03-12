@@ -4,7 +4,6 @@ metadata:
   name: shoe-ingress
   annotations:
     appgw.ingress.kubernetes.io/ssl-redirect: "true"
-    appgw.ingress.kubernetes.io/override-frontend-port: "443"
 spec:
   ingressClassName: azure-application-gateway
   tls:
