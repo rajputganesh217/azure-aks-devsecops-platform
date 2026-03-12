@@ -18,7 +18,7 @@ environment {
 
     TF_DIR = "infra/terraform/env/core"
     CONF_DIR = "backend"
-    REPORTS_STORAGE = "devdevsecopsrepg0aa9"
+    REPORTS_STORAGE = "devdevsecopsrepwzn1c"
 
     ARM_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
     ARM_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
@@ -253,7 +253,7 @@ az storage blob upload-batch \
   --destination security-reports \
   --destination-path terraform/${params.ENVIRONMENT}/${env.COMMIT_ID} \
   --source security-reports \
-  --auth-mode login
+  --auth-mode login || true
 """
 
 

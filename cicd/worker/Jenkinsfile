@@ -20,7 +20,7 @@ pipeline {
         DOCKER_CREDS_ID = "azure-acr-credentials"
         SONAR_PROJECT_KEY = "${APP_NAME}-service"
         SONAR_SERVER_ID   = "sonarqube"
-        STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
+        STORAGE_ACCOUNT = "devdevsecopsrepwzn1c"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
@@ -213,6 +213,6 @@ def uploadSecurityReports() {
       --destination security-reports \\
       --destination-path ${APP_NAME}/${env.COMMIT_ID} \\
       --source security-reports \\
-      --auth-mode login
+      --auth-mode login || true
     """
 }

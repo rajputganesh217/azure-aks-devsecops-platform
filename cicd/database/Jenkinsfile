@@ -8,7 +8,7 @@ pipeline {
 
     environment {
         K8S_DIR = "kubernetes/postgres"
-        STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
+        STORAGE_ACCOUNT = "devdevsecopsrepwzn1c"
         NAMESPACE = "${params.ENVIRONMENT}"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
@@ -155,6 +155,6 @@ def uploadReports() {
       --account-name $STORAGE_ACCOUNT \
       --destination security-reports/database/$COMMIT_ID \
       --source security-reports \
-      --auth-mode login
+      --auth-mode login || true
     '''
 }

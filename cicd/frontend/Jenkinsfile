@@ -12,7 +12,7 @@ pipeline {
         APP_NAME = "frontend"
         APP_DIR  = "app/${APP_NAME}"
         K8S_DIR  = "kubernetes/${APP_NAME}"
-        STORAGE_ACCOUNT = "devdevsecopsrepg0aa9"
+        STORAGE_ACCOUNT = "devdevsecopsrepwzn1c"
         DOCKER_CREDS_ID = "azure-acr-credentials"
 
         REGISTRY   = "mydevopsacr123.azurecr.io"
@@ -198,6 +198,6 @@ def uploadSecurityReports() {
           --destination security-reports \\
           --destination-path ${APP_NAME}/${env.COMMIT_ID} \\
           --source security-reports \\
-          --auth-mode login
+          --auth-mode login || true
     """
 }
