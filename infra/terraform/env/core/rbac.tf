@@ -34,7 +34,7 @@ resource "azurerm_role_assignment" "agic_rg_reader" {
 ############################################
 
 resource "azurerm_role_assignment" "jump_aks_admin" {
-  scope                = module.aks.aks_id
+  scope                = module.aks.cluster_id
   role_definition_name = "Azure Kubernetes Service Cluster Admin Role"
   principal_id         = module.jump_server.identity_principal_id
 }
