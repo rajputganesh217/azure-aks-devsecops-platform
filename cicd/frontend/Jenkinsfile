@@ -111,7 +111,8 @@ def prepareWorkspace() {
         error "PROMOTE_COMMIT_ID is required for non-dev environments!"
     }
 
-    env.IMAGE_TAG = "${env.IMAGE_NAME}:${env.DEPLOY_COMMIT}"
+    // New Tagging Format: service-env-hash
+    env.IMAGE_TAG = "${env.IMAGE_NAME}:${env.APP_NAME}-${params.ENVIRONMENT}-${env.DEPLOY_COMMIT}"
 
     sh "rm -rf security-reports && mkdir -p security-reports"
     echo "Environment: ${params.ENVIRONMENT} | Commit: ${env.DEPLOY_COMMIT} | Image: ${env.IMAGE_TAG}"
@@ -147,19 +148,20 @@ def runTrivyScan() {
 def dockerPullTagPush() {
     def sourceEnvMap = ['qa': 'dev', 'uat': 'qa', 'prod': 'uat']
     def sourceEnv = sourceEnvMap[params.ENVIRONMENT]
-    def sourceTag = "${env.IMAGE_NAME}:${env.DEPLOY_COMMIT}"
-    def targetTag = "${env.IMAGE_NAME}:${env.DEPLOY_COMMIT}"
+    
+    // Pull from the source environment's tag
+    def sourceTag = "${env.IMAGE_NAME}:${env.APP_NAME}-${sourceEnv}-${env.DEPLOY_COMMIT}"
+    // Target tag for the current environment
+    def targetTag = "${env.IMAGE_TAG}"
 
-    echo "Promoting ${sourceTag} → ${params.ENVIRONMENT}"
+    echo "Promoting ${sourceTag} → ${targetTag}"
 
     docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
         sh "docker pull ${sourceTag}"
-    }
-    docker.withRegistry("https://${REGISTRY}", "${DOCKER_CREDS_ID}") {
+        sh "docker tag ${sourceTag} ${targetTag}"
         sh "docker push ${targetTag}"
     }
-    sh "docker image rm ${sourceTag} || true"
-    echo "Image promoted to ${params.ENVIRONMENT}: ${targetTag}"
+    sh "docker image rm ${sourceTag} ${targetTag} || true"
 }
 
 def deployToAKS() {
