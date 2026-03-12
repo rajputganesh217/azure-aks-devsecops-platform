@@ -3,5 +3,5 @@ output "appgw_id" {
 }
 
 output "public_ip" {
-  value = azurerm_public_ip.appgw_pip.ip_address
+  value = data.azurerm_public_ip.appgw_pip.ip_address
 }

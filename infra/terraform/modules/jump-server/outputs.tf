@@ -1,6 +1,6 @@
 output "public_ip" {
   description = "Public IP of the jump server"
-  value       = azurerm_public_ip.jump.ip_address
+  value       = data.azurerm_public_ip.jump.ip_address
 }
 
 output "private_ip" {
