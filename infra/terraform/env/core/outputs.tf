@@ -14,4 +14,8 @@ output "keyvault_name" {
   value = module.keyvault.keyvault_name
 }
 
+output "jump_server_ip" {
+  value = module.jump_server.public_ip
+}
+
 
