@@ -46,28 +46,55 @@ If you want to spin this up yourself, here is how.
    cd azure-aks-devsecops-platform
    ```
 
-2. **Set up your Jenkins Credentials:**
+2. **Jump Server Setup (Prerequisites):**
+   This project uses a Jump Server (Bastion) to securely deploy to AKS. 
+   - Create a Linux Virtual Machine in the same VNet as AKS (or with VNet peering).
+   - Install `kubectl` and `docker` on the Jump Server.
+   - Ensure the Jenkins agent has SSH access to the Jump Server.
+   - Add the following credentials to Jenkins:
+     - `jump-server-ssh`: SSH Private Key for the Jump Server.
+     - `JUMP_SERVER_IP`: Public or Private IP of the Jump Server.
+
+3. **Set up your Jenkins Credentials:**
    Go to Manage Jenkins -> Credentials and add these as Secret Texts:
    * **Azure credentials**: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`. (Also add them as `ARM_...` for Terraform to pick them up).
    * **Database credentials**: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`.
    * **API Keys**: `sonar-token`, `NVD_API_KEY`, `azure-acr-credentials`.
+   * **Networking**: `JUMP_SERVER_IP`.
 
-3. **Run the Pipelines:**
-   You have to run these in order the first time, otherwise the app won't have a database or a cluster to talk to:
+4. **Run the Pipelines:**
+   You have to run these in order the first time:
 
    * First, run `cicd/terraform/Jenkinsfile`. (Sets up the VNet, AKS, and ACR).
-   * Second, run `cicd/database/Jenkinsfile`. (Spins up Postgres and creates the k8s secrets).
-   * Third, run `cicd/backend/Jenkinsfile`.
-   * Fourth, run `cicd/worker/Jenkinsfile`.
-   * Fifth, run `cicd/frontend/Jenkinsfile`.
+   * Second, run `cicd/database/Jenkinsfile`. (Sets up the database and project secrets).
+   * Third, run `cicd/backend/Jenkinsfile` (Environment: `dev`).
+   * Fourth, run `cicd/worker/Jenkinsfile` (Environment: `dev`).
+   * Fifth, run `cicd/frontend/Jenkinsfile` (Environment: `dev`).
 
 Wait a few minutes after the frontend pipeline finishes, run `kubectl get svc shoe-frontend` to grab your public IP, and you're good to go!
 
 ---
 
-## 1. CI/CD Pipeline Flow
+## 1. Image Tagging & Promotion Strategy
 
-Here is what happens when code gets pushed. We use Jenkins declarative pipelines to run everything. If any of the security scans fail, the pipeline stops.
+We follow a standardized tagging convention and a multi-environment promotion strategy to ensure reliability.
+
+### Tagging Convention
+Images are tagged in the format: `{service-name}-{environment}-{8-digit-commit-hash}`
+Example: `frontend-dev-abcdef12`
+
+### Promotion Flow
+1. **DEV**: Developers push code, triggered by a webhook. Images are built and tagged for `dev`.
+2. **QA**: Triggered manually from the pipeline with a `PROMOTE_COMMIT_ID`. It pulls the `dev` tag, retags it for `qa`, and deploys.
+3. **UAT/PROD**: Follows the same pattern, pulling from the previous environment's tag (`qa` -> `uat` -> `prod`).
+
+This ensures that the exact same image that was tested in QA is promoted to Production.
+
+---
+
+## 2. CI/CD Pipeline Flow
+
+Here is what happens when code gets pushed. We use Jenkins declarative pipelines to run everything via a **Jump Server** for secure cluster access.
 
 ```mermaid
 flowchart TD
@@ -79,24 +106,28 @@ flowchart TD
         Gitleaks("Gitleaks (Secrets)")
         Sonar("SonarQube (SAST)")
         DepCheck("Dependency-Check (SCA)")
-        Checkov("Checkov (IaC)")
     end
     
     Jenkins ==>|3. Run Scans| Scans
     Jenkins ==>|4. Docker Build| DockerBuild("Docker Build")
-    DockerBuild ==>|5. Container Scan| Trivy("Trivy")
-    Jenkins ==>|6. Upload Reports| Blob("Azure Blob Storage")
-    Trivy ==>|7. Push Image| ACR("Azure Container Registry")
-    Jenkins -.->|8. Deploy via az cli| AKS("AKS Cluster")
-    ACR -.->|9. AKS Pulls Image| AKS
+    DockerBuild ==>|5. Push Image| ACR("Azure Container Registry")
+    Jenkins ==>|6. Deploy| Jump("Jump Server")
+    Jump ==>|7. Kubectl Apply| AKS("AKS Cluster")
+    ACR -.->|8. AKS Pulls Image| AKS
 ```
 
-1. We scan the code for hardcoded secrets (`Gitleaks`), bad dependencies (`Dependency-Check`), and code quality (`SonarQube`).
-2. If that passes, we build the Docker container.
-3. Before pushing it anywhere, `Trivy` scans the image for CVEs (even the Postgres third-party image).
-4. If it's clean, we push it to Azure Container Registry (ACR).
-5. All the reports (JSON, XML, txt) are zipped and pushed to an Azure Blob Storage container so we have a paper trail.
-6. Finally, Jenkins safely proxies a kubectl command to AKS to update the deployments.
+1. **Scans**: We scan for secrets, code quality, and dependency vulnerabilities.
+2. **Build**: Docker image is built and tagged with the standardized format.
+3. **Push**: Image is pushed to Azure Container Registry.
+4. **Deploy**: Jenkins connects to a **Jump Server** via SSH.
+5. **Update**: The Jump Server executes `kubectl` commands to update the AKS deployment using the new image tag.
+
+
+1. **Scans**: We scan the code for hardcoded secrets (`Gitleaks`), bad dependencies (`Dependency-Check`), and code quality (`SonarQube`).
+2. **Build**: Docker image is built and tagged using the `service-env-hash` format.
+3. **Push**: Image is pushed to Azure Container Registry (ACR).
+4. **Deploy**: Jenkins connects to the **Jump Server** and executes the deployment.
+5. **Verify**: AKS pulls the new image from ACR and updates the pods.
 
 ---
 
