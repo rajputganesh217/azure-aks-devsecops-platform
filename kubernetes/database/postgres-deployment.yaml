@@ -24,6 +24,42 @@ spec:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
           subPath: pgdata
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 999  # Standard postgres UID
+        
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+        
+        livenessProbe:
+          exec:
+            command:
+              - pg_isready
+              - -U
+              - "$(POSTGRES_USER)"
+              - -d
+              - "$(POSTGRES_DB)"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          exec:
+            command:
+              - pg_isready
+              - -U
+              - "$(POSTGRES_USER)"
+              - -d
+              - "$(POSTGRES_DB)"
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
       volumes:
       - name: postgres-data
         persistentVolumeClaim:

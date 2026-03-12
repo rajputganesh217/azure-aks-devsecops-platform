@@ -12,35 +12,7 @@ resource "azurerm_key_vault" "kv" {
   sku_name                   = "standard"
   soft_delete_retention_days = 7
   purge_protection_enabled   = true
-  enable_rbac_authorization  = false
-
-  access_policy {
-    tenant_id = var.tenant_id
-    object_id = data.azurerm_client_config.current.object_id
-
-    secret_permissions = [
-      "Set",
-      "Get",
-      "Delete",
-      "Purge",
-      "Recover",
-      "List"
-    ]
-  }
-
-  # AKS CSI Driver access policy for reading secrets
-  dynamic "access_policy" {
-    for_each = var.csi_identity_object_id != "" ? [1] : []
-    content {
-      tenant_id = var.tenant_id
-      object_id = var.csi_identity_object_id
-
-      secret_permissions = [
-        "Get",
-        "List"
-      ]
-    }
-  }
+  enable_rbac_authorization  = true
 
   tags = merge(var.tags, {
     Name = var.keyvault_name

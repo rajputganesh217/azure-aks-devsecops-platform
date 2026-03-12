@@ -38,6 +38,8 @@ resource "azurerm_kubernetes_cluster" "aks" {
     secret_rotation_interval = "2m"
   }
 
+  azure_policy_enabled = true
+
   ############################################
   # Identity
   ############################################

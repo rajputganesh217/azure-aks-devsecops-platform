@@ -58,3 +58,19 @@ resource "azurerm_role_assignment" "jump_rg_reader" {
   role_definition_name = "Reader"
   principal_id         = module.jump_server.identity_principal_id
 }
+
+############################################
+# Key Vault: RBAC Roles
+############################################
+
+resource "azurerm_role_assignment" "kv_admin" {
+  scope                = module.keyvault.keyvault_id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "azurerm_role_assignment" "aks_kv_secrets" {
+  scope                = module.keyvault.keyvault_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = module.aks.key_vault_secrets_provider_identity_object_id
+}
