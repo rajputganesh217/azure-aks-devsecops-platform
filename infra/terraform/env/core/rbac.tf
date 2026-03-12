@@ -62,6 +62,16 @@ resource "azurerm_role_assignment" "jump_acr_pull" {
 }
 
 ############################################
+# Jenkins SP → ACR: AcrPush
+############################################
+
+resource "azurerm_role_assignment" "jenkins_acr_push" {
+  scope                = module.acr.acr_id
+  role_definition_name = "AcrPush"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+############################################
 # Jump Server → Resource Group: Reader
 ############################################
 
