@@ -91,9 +91,9 @@ spec:
             matchLabels:
               k8s-app: kube-dns
       ports:
-        - protocol: Udp
+        - protocol: UDP
           port: 53
-        - protocol: Tcp
+        - protocol: TCP
           port: 53
 ---
 apiVersion: networking.k8s.io/v1
@@ -113,7 +113,7 @@ spec:
             matchLabels:
               app: shoe-backend
       ports:
-        - protocol: Tcp
+        - protocol: TCP
           port: 5000
 ---
 apiVersion: networking.k8s.io/v1
@@ -133,7 +133,7 @@ spec:
             matchLabels:
               app: postgres
       ports:
-        - protocol: Tcp
+        - protocol: TCP
           port: 5432
 ---
 apiVersion: networking.k8s.io/v1
@@ -153,5 +153,5 @@ spec:
             matchLabels:
               app: postgres
       ports:
-        - protocol: Tcp
+        - protocol: TCP
           port: 5432
