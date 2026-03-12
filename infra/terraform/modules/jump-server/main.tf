@@ -2,13 +2,9 @@
 # Jump Server VM (Bastion for private AKS)
 ############################################
 
-resource "azurerm_public_ip" "jump" {
+data "azurerm_public_ip" "jump" {
   name                = "${var.name}-pip"
-  location            = var.location
   resource_group_name = var.resource_group_name
-  allocation_method   = "Static"
-  sku                 = "Standard"
-  tags                = var.tags
 }
 
 resource "azurerm_network_security_group" "jump" {

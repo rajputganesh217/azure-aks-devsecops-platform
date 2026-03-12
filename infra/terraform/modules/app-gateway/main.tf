@@ -1,14 +1,6 @@
-resource "azurerm_public_ip" "appgw_pip" {
+data "azurerm_public_ip" "appgw_pip" {
   name                = "${var.name}-pip"
-  location            = var.location
   resource_group_name = var.resource_group_name
-
-  allocation_method = "Static"
-  sku               = "Standard"
-
-  tags = merge(var.tags, {
-    Name = "${var.name}-pip"
-  })
 }
 
 resource "azurerm_application_gateway" "appgw" {

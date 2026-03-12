@@ -55,6 +55,13 @@ stages {
     }
 
 
+    stage('Prepare Static IPs') {
+        when {
+            expression { params.ACTION != 'destroy' }
+        }
+        steps { script { prepareStaticIPs() } }
+    }
+
     stage('Terraform Init') {
         steps { script { terraformInit() } }
     }
@@ -141,6 +148,21 @@ mkdir -p security-reports
 echo "Workspace ready for commit ${env.COMMIT_ID}"
 
 
+}
+
+def prepareStaticIPs() {
+    sh """
+    az login --service-principal \\
+      -u $ARM_CLIENT_ID \\
+      -p $ARM_CLIENT_SECRET \\
+      --tenant $ARM_TENANT_ID
+
+    az account set --subscription $ARM_SUBSCRIPTION_ID
+
+    # Create eternal public IPs independent of Terraform state
+    az network public-ip create -g aks-microservices-dev-rg -n ${params.ENVIRONMENT}-appgw-pip --sku Standard --allocation-method Static || true
+    az network public-ip create -g aks-microservices-dev-rg -n devops-jump-server-pip --sku Standard --allocation-method Static || true
+    """
 }
 
 def runCheckovScan() {
