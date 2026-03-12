@@ -100,8 +100,17 @@ apt-get install -y ca-certificates curl apt-transport-https gnupg jq
 echo "=== Installing Azure CLI ==="
 curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
-echo "=== Installing kubectl ==="
-az aks install-cli
+echo "=== Installing kubectl and kubelogin with retries ==="
+n=0
+while [ $n -lt 5 ]; do
+  if az aks install-cli; then
+    echo "CLI tools installed successfully"
+    break
+  fi
+  n=$((n+1))
+  echo "CLI install failed, retrying in 10s..."
+  sleep 10
+done
 
 echo "=== Installing Docker ==="
 apt-get install -y docker.io
@@ -114,15 +123,15 @@ curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 |
 
 echo "=== Setting up kubeconfig (with retry for role propagation) ==="
 n=0
-while [ $n -lt 20 ]; do
+while [ $n -lt 30 ]; do
   if su - ${var.admin_username} -c "az login --identity" && \
-     su - ${var.admin_username} -c "az aks get-credentials --resource-group ${var.resource_group_name} --name ${var.aks_name} --overwrite-existing"; then
+     su - ${var.admin_username} -c "az aks get-credentials --resource-group ${var.resource_group_name} --name ${var.aks_name} --admin --overwrite-existing"; then
     echo "Kubeconfig configured successfully on attempt $((n+1))"
     break
   fi
   n=$((n+1))
-  echo "Attempt $n failed, retrying in 30s..."
-  sleep 30
+  echo "Attempt $n failed, retrying in 20s..."
+  sleep 20
 done
 
 echo "=== Logging into ACR ==="

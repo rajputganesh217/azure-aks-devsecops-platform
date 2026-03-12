@@ -39,6 +39,18 @@ resource "azurerm_role_assignment" "jump_aks_admin" {
   principal_id         = module.jump_server.identity_principal_id
 }
 
+resource "azurerm_role_assignment" "jump_aks_user" {
+  scope                = module.aks.cluster_id
+  role_definition_name = "Azure Kubernetes Service Cluster User Role"
+  principal_id         = module.jump_server.identity_principal_id
+}
+
+resource "azurerm_role_assignment" "jump_aks_rbac_admin" {
+  scope                = module.aks.cluster_id
+  role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
+  principal_id         = module.jump_server.identity_principal_id
+}
+
 ############################################
 # Jump Server → ACR: AcrPull
 ############################################
