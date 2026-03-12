@@ -190,6 +190,9 @@ def deployToAKS() {
 
 def uploadSecurityReports() {
     sh """
+        # Clear Azure CLI cache to avoid AttributeError issues
+        rm -rf ~/.azure/msal_http_cache.bin || true
+
         az storage blob upload-batch \\
           --account-name ${STORAGE_ACCOUNT} \\
           --destination security-reports \\
