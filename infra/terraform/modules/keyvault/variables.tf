@@ -53,3 +53,11 @@ variable "csi_identity_object_id" {
   type        = string
   default     = ""
 }
+
+# ID of the kv_admin role assignment — used to ensure secrets are always destroyed
+# BEFORE the role assignment, preventing 403 errors during terraform destroy.
+variable "kv_admin_role_id" {
+  description = "Resource ID of the kv_admin role assignment. Secrets depend on this to control destroy order."
+  type        = string
+  default     = ""
+}

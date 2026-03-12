@@ -25,6 +25,8 @@ data "azurerm_client_config" "current" {}
 
 ############################################
 # Store App Secrets
+# NOTE: depends_on kv_admin_role_id ensures secrets are destroyed BEFORE the role
+# assignment, preventing 403 Forbidden errors during terraform destroy.
 ############################################
 
 resource "azurerm_key_vault_secret" "postgres_db" {
@@ -32,7 +34,12 @@ resource "azurerm_key_vault_secret" "postgres_db" {
   name         = "postgres-db"
   value        = var.postgres_db
   key_vault_id = azurerm_key_vault.kv.id
-  depends_on   = [azurerm_key_vault.kv]
+
+  depends_on = [azurerm_key_vault.kv]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "azurerm_key_vault_secret" "postgres_user" {
@@ -40,7 +47,12 @@ resource "azurerm_key_vault_secret" "postgres_user" {
   name         = "postgres-user"
   value        = var.postgres_user
   key_vault_id = azurerm_key_vault.kv.id
-  depends_on   = [azurerm_key_vault.kv]
+
+  depends_on = [azurerm_key_vault.kv]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "azurerm_key_vault_secret" "postgres_password" {
@@ -48,7 +60,12 @@ resource "azurerm_key_vault_secret" "postgres_password" {
   name         = "postgres-password"
   value        = var.postgres_password
   key_vault_id = azurerm_key_vault.kv.id
-  depends_on   = [azurerm_key_vault.kv]
+
+  depends_on = [azurerm_key_vault.kv]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "azurerm_key_vault_secret" "db_host" {
@@ -56,5 +73,10 @@ resource "azurerm_key_vault_secret" "db_host" {
   name         = "db-host"
   value        = var.db_host
   key_vault_id = azurerm_key_vault.kv.id
-  depends_on   = [azurerm_key_vault.kv]
+
+  depends_on = [azurerm_key_vault.kv]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
