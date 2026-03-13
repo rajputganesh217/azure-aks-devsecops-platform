@@ -4,64 +4,115 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>Shoe Store</title>
 
 <style>
 
+*{
+box-sizing:border-box;
+}
+
 body{
 margin:0;
-font-family:Arial;
-background:#1e3a8a;
-color:white;
+font-family:Segoe UI,Arial;
+background:#f3f4f6;
+color:#111;
 }
 
 header{
-text-align:center;
+background:#111827;
+color:white;
 padding:20px;
-background:#1e40af;
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+header h1{
+margin:0;
+font-size:24px;
+}
+
+nav a{
+color:white;
+margin-left:20px;
+text-decoration:none;
+font-size:14px;
+}
+
+nav a:hover{
+text-decoration:underline;
 }
 
 .container{
 display:grid;
-grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
-gap:20px;
-padding:20px;
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+gap:25px;
+padding:30px;
 }
 
 .card{
 background:white;
-color:black;
-border-radius:10px;
+border-radius:12px;
 padding:15px;
 text-align:center;
-box-shadow:0 4px 6px rgba(0,0,0,0.2);
+box-shadow:0 4px 12px rgba(0,0,0,0.1);
+transition:transform 0.2s;
+}
+
+.card:hover{
+transform:translateY(-5px);
 }
 
 .card img{
 width:100%;
-height:200px;
+height:180px;
 object-fit:cover;
-border-radius:10px;
+border-radius:8px;
+}
+
+.price{
+font-size:18px;
+color:#2563eb;
+margin:10px 0;
 }
 
 .btn{
-margin-top:10px;
-padding:10px 15px;
-background:#1e40af;
+padding:10px 18px;
+background:#2563eb;
 color:white;
 border:none;
-border-radius:5px;
+border-radius:6px;
 cursor:pointer;
+font-weight:bold;
 }
 
 .btn:hover{
-background:#2563eb;
+background:#1d4ed8;
 }
 
 .status{
 text-align:center;
 font-size:18px;
-margin-top:10px;
+padding:10px;
+}
+
+.success{
+color:green;
+}
+
+.error{
+color:red;
+}
+
+footer{
+text-align:center;
+padding:20px;
+background:#111827;
+color:white;
+margin-top:30px;
+font-size:14px;
 }
 
 </style>
@@ -71,8 +122,15 @@ margin-top:10px;
 <body>
 
 <header>
-<h1>👟 Shoe Store</h1>
-<p>Find your perfect pair of shoes</p>
+<h1>👟 DevOps Shoe Store</h1>
+
+<nav>
+<a href="#">Home</a>
+<a href="#">Products</a>
+<a href="#">Orders</a>
+<a href="#">Contact</a>
+</nav>
+
 </header>
 
 <div class="status" id="status"></div>
@@ -80,76 +138,80 @@ margin-top:10px;
 <div class="container">
 
 <div class="card">
-<img src="https://placehold.co/250x200?text=Shoe+1">
+<img src="https://placehold.co/250x200?text=Running+Shoes">
 <h3>Running Shoes</h3>
-<p>$50</p>
+<p class="price">$50</p>
 <button class="btn" onclick="buyShoe(1)">Buy Now</button>
 </div>
 
 <div class="card">
-<img src="https://placehold.co/250x200?text=Shoe+2">
+<img src="https://placehold.co/250x200?text=Casual+Sneakers">
 <h3>Casual Sneakers</h3>
-<p>$45</p>
+<p class="price">$45</p>
 <button class="btn" onclick="buyShoe(2)">Buy Now</button>
 </div>
 
 <div class="card">
-<img src="https://placehold.co/250x200?text=Shoe+3">
+<img src="https://placehold.co/250x200?text=Sports+Shoes">
 <h3>Sports Shoes</h3>
-<p>$60</p>
+<p class="price">$60</p>
 <button class="btn" onclick="buyShoe(3)">Buy Now</button>
 </div>
 
 <div class="card">
-<img src="https://placehold.co/250x200?text=Shoe+4">
+<img src="https://placehold.co/250x200?text=Leather+Shoes">
 <h3>Leather Shoes</h3>
-<p>$80</p>
+<p class="price">$80</p>
 <button class="btn" onclick="buyShoe(4)">Buy Now</button>
 </div>
 
 <div class="card">
-<img src="https://placehold.co/250x200?text=Shoe+5">
+<img src="https://placehold.co/250x200?text=High+Tops">
 <h3>High Tops</h3>
-<p>$55</p>
+<p class="price">$55</p>
 <button class="btn" onclick="buyShoe(5)">Buy Now</button>
 </div>
 
 <div class="card">
-<img src="https://placehold.co/250x200?text=Shoe+6">
+<img src="https://placehold.co/250x200?text=Slip+Ons">
 <h3>Slip Ons</h3>
-<p>$40</p>
+<p class="price">$40</p>
 <button class="btn" onclick="buyShoe(6)">Buy Now</button>
 </div>
 
 <div class="card">
-<img src="https://placehold.co/250x200?text=Shoe+7">
+<img src="https://placehold.co/250x200?text=Canvas+Shoes">
 <h3>Canvas Shoes</h3>
-<p>$35</p>
+<p class="price">$35</p>
 <button class="btn" onclick="buyShoe(7)">Buy Now</button>
 </div>
 
 <div class="card">
-<img src="https://placehold.co/250x200?text=Shoe+8">
+<img src="https://placehold.co/250x200?text=Formal+Shoes">
 <h3>Formal Shoes</h3>
-<p>$90</p>
+<p class="price">$90</p>
 <button class="btn" onclick="buyShoe(8)">Buy Now</button>
 </div>
 
 <div class="card">
-<img src="https://placehold.co/250x200?text=Shoe+9">
+<img src="https://placehold.co/250x200?text=Walking+Shoes">
 <h3>Walking Shoes</h3>
-<p>$48</p>
+<p class="price">$48</p>
 <button class="btn" onclick="buyShoe(9)">Buy Now</button>
 </div>
 
 <div class="card">
-<img src="https://placehold.co/250x200?text=Shoe+10">
+<img src="https://placehold.co/250x200?text=Training+Shoes">
 <h3>Training Shoes</h3>
-<p>$65</p>
+<p class="price">$65</p>
 <button class="btn" onclick="buyShoe(10)">Buy Now</button>
 </div>
 
 </div>
+
+<footer>
+DevOps Microservices Demo • AKS • Jenkins • Terraform
+</footer>
 
 <script>
 
@@ -171,11 +233,11 @@ throw new Error("API error")
 return res.json()
 })
 .then(data=>{
-document.getElementById("status").innerText="Order placed successfully!"
+document.getElementById("status").innerHTML="<span class='success'>Order placed successfully ✔</span>"
 })
 .catch(err=>{
 console.log(err)
-document.getElementById("status").innerText="Order failed"
+document.getElementById("status").innerHTML="<span class='error'>Order failed ✖</span>"
 })
 
 }
