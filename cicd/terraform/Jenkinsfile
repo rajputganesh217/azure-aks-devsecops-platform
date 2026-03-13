@@ -91,11 +91,11 @@ stages {
     stage('Approval Gate') {
 
         when {
-            expression { params.ENVIRONMENT != 'dev' && params.ACTION == 'apply' }
+            expression { params.ACTION == 'apply' }
         }
 
         steps {
-            input message: "Approve deployment to ${params.ENVIRONMENT}?"
+            input message: "Approve deployment to ${params.ENVIRONMENT} based on the Terraform Plan above?"
         }
     }
 
