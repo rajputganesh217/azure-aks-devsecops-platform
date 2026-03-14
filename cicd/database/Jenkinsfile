@@ -158,10 +158,15 @@ def uploadReports() {
     # Clear Azure CLI cache to avoid AttributeError issues
     rm -rf ~/.azure/msal_http_cache.bin || true
 
+    az account set --subscription $AZURE_SUBSCRIPTION_ID
+
+    ACCOUNT_KEY=$(az storage account keys list --account-name $STORAGE_ACCOUNT --query "[0].value" -o tsv)
+
     az storage blob upload-batch \
       --account-name $STORAGE_ACCOUNT \
+      --account-key $ACCOUNT_KEY \
       --destination security-reports/database/$COMMIT_ID \
       --source security-reports \
-      --auth-mode login || true
+      --auth-mode key || true
     '''
 }

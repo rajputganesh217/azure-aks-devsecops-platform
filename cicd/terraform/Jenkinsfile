@@ -265,12 +265,15 @@ az login --service-principal \
 
 az account set --subscription $ARM_SUBSCRIPTION_ID
 
+ACCOUNT_KEY=$(az storage account keys list --account-name ${REPORTS_STORAGE} --query "[0].value" -o tsv)
+
 az storage blob upload-batch \
   --account-name ${REPORTS_STORAGE} \
+  --account-key $ACCOUNT_KEY \
   --destination security-reports \
   --destination-path terraform/${params.ENVIRONMENT}/${env.COMMIT_ID} \
   --source security-reports \
-  --auth-mode login || true
+  --auth-mode key || true
 """
 
 
