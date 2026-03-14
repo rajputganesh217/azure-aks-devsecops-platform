@@ -32,6 +32,8 @@ terraform {
     # Environment variables will configure this during CI
     # ARM_SUBSCRIPTION_ID, ARM_TENANT_ID, ARM_CLIENT_ID, ARM_CLIENT_SECRET
     # Container and storage account must be passed via init command
+    use_azuread_auth     = true # Use Microsoft Entra ID authentication for state
+    use_msi              = false # Set to true if running on Azure VM/Runner with Identity
   }
 }
 
