@@ -135,7 +135,7 @@ def deployPostgres() {
             set -e
             # Perform variable substitution locally on the Jenkins agent
             for f in ${K8S_DIR}/*.yaml; do
-                envsubst '\$AZURE_TENANT_ID,\$CSI_IDENTITY_CLIENT_ID' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
+                envsubst '\$AZURE_TENANT_ID,\$CSI_IDENTITY_CLIENT_ID,\$NAMESPACE' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
             done
 
             ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
