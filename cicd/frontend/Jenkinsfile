@@ -167,23 +167,23 @@ def deployToAKS() {
     def dnsHost = "${NAMESPACE}.microservices.local"
 
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
-        // Replace placeholders in manifests
         sh """
-        sed -i 's|{{IMAGE_TAG}}|${env.IMAGE_TAG}|g' ${K8S_DIR}/deployment.yaml
-        sed -i 's|{{HOSTNAME}}|${dnsHost}|g' ${K8S_DIR}/ingress.yaml
-        """
+            set -e
+            # Perform variable substitution locally on the Jenkins agent
+            for f in ${K8S_DIR}/*.yaml; do
+                envsubst '\$IMAGE_TAG,\$HOSTNAME,\$NAMESPACE' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
+            done
 
-        // Copy manifests to Jump Server and deploy
-        sh """
-        ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
-        scp -o StrictHostKeyChecking=no -i \${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
+            ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
+            scp -o StrictHostKeyChecking=no -i \${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
 
-        ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
-            kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-            kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
-            kubectl rollout status deployment/shoe-frontend -n ${NAMESPACE} --timeout=300s
-            rm -rf ${remoteDir}
-        "
+            ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
+                set -e
+                kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
+                kubectl rollout status deployment/shoe-frontend -n ${NAMESPACE} --timeout=300s
+                rm -rf ${remoteDir}
+            "
         """
     }
     echo "Deployed ${APP_NAME} to ${params.ENVIRONMENT} namespace"

@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: shoe-backend
+  namespace: ${NAMESPACE}
 spec:
   replicas: 1
   strategy:
@@ -16,7 +17,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: "{{IMAGE_TAG}}"
+          image: "${IMAGE_TAG}"
           imagePullPolicy: Always
 
           ports:

@@ -8,10 +8,10 @@ spec:
   ingressClassName: azure-application-gateway
   tls:
   - hosts:
-    - "{{HOSTNAME}}"
+    - "${HOSTNAME}"
     secretName: microservices-tls-secret
   rules:
-  - host: "{{HOSTNAME}}"
+  - host: "${HOSTNAME}"
     http:
       paths:
       - path: /
