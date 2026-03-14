@@ -1,50 +1,3 @@
-apiVersion: secrets-store.csi.x-k8s.io/v1
-kind: SecretProviderClass
-metadata:
-  name: azure-kv-secrets
-  namespace: dev
-spec:
-  provider: azure
-  parameters:
-    usePodIdentity: "false"
-    useVMManagedIdentity: "true" 
-    userAssignedIdentityID: "${CSI_IDENTITY_CLIENT_ID}" 
-    keyvaultName: "dev-devsecops-kv"
-    objects: |
-      array:
-        - |
-          objectName: POSTGRES-DB
-          objectType: secret
-        - |
-          objectName: POSTGRES-USER
-          objectType: secret
-        - |
-          objectName: POSTGRES-PASSWORD
-          objectType: secret
-    tenantId: "${AZURE_TENANT_ID}"
-  secretObjects:
-    - secretName: postgres-secret
-      type: Opaque
-      data:
-        - objectName: POSTGRES-DB
-          key: POSTGRES_DB
-        - objectName: POSTGRES-USER
-          key: POSTGRES_USER
-        - objectName: POSTGRES-PASSWORD
-          key: POSTGRES_PASSWORD
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgres-pvc
-  namespace: dev
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 5Gi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -60,6 +13,8 @@ spec:
       labels:
         app: postgres
     spec:
+      securityContext:      
+        fsGroup: 999
       containers:
       - name: postgres
         image: postgres:15.5
@@ -75,24 +30,18 @@ spec:
         - name: secrets-store-inline
           mountPath: "/mnt/secrets-store"
           readOnly: true
-        
-        securityContext:
+        securityContext:   
           allowPrivilegeEscalation: false
           runAsNonRoot: true
           runAsUser: 999 
-      
-      securityContext:
-        fsGroup: 999
-        
-        resources:
+        resources:          
           limits:
             cpu: "100m"
             memory: "128Mi"
           requests:
             cpu: "10m"
             memory: "64Mi"
-        
-        livenessProbe:
+        livenessProbe:      
           exec:
             command:
               - pg_isready
@@ -102,8 +51,7 @@ spec:
               - "$(POSTGRES_DB)"
           initialDelaySeconds: 30
           periodSeconds: 10
-        
-        readinessProbe:
+        readinessProbe:     
           exec:
             command:
               - pg_isready
@@ -113,7 +61,6 @@ spec:
               - "$(POSTGRES_DB)"
           initialDelaySeconds: 5
           periodSeconds: 5
-      
       volumes:
       - name: postgres-data
         persistentVolumeClaim:
@@ -124,14 +71,3 @@ spec:
           readOnly: true
           volumeAttributes:
             secretProviderClass: "azure-kv-secrets"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres
-  namespace: dev
-spec:
-  ports:
-  - port: 5432
-  selector:
-    app: postgres
