@@ -21,7 +21,7 @@ spec:
         - |
           objectName: POSTGRES-PASSWORD
           objectType: secret
-    tenantId: "" 
+    tenantId: "REPLACE_WITH_YOUR_TENANT_ID" # Retrieve with 'az account show --query tenantId -o tsv'
   secretObjects:
     - secretName: postgres-secret
       type: Opaque
