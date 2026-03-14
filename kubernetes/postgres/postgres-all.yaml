@@ -8,7 +8,7 @@ spec:
   parameters:
     usePodIdentity: "false"
     useVMManagedIdentity: "true" 
-    userAssignedIdentityID: "ba5e5ce1-083d-4b27-8e1f-91bfa3fa1203" 
+    userAssignedIdentityID: "${CSI_IDENTITY_CLIENT_ID}" 
     keyvaultName: "dev-devsecops-kv"
     objects: |
       array:
@@ -21,7 +21,7 @@ spec:
         - |
           objectName: POSTGRES-PASSWORD
           objectType: secret
-    tenantId: "REPLACE_WITH_YOUR_TENANT_ID" # Retrieve with 'az account show --query tenantId -o tsv'
+    tenantId: "${AZURE_TENANT_ID}"
   secretObjects:
     - secretName: postgres-secret
       type: Opaque

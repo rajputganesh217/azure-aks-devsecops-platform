@@ -15,6 +15,7 @@ pipeline {
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
+        CSI_IDENTITY_CLIENT_ID = credentials('CSI_IDENTITY_CLIENT_ID')
 
         AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
         AKS_CLUSTER_NAME   = "microservices-aks"
@@ -146,6 +147,11 @@ def deployPostgres() {
 
             ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
                 set -ex
+                echo 'Performing variable substitution on manifests in ${remoteDir}...'
+                for f in ${remoteDir}/*.yaml; do
+                    envsubst '${AZURE_TENANT_ID},${CSI_IDENTITY_CLIENT_ID}' < \"\$f\" > \"\$f.tmp\" && mv \"\$f.tmp\" \"\$f\"
+                done
+
                 echo 'Listing files to be applied from ${remoteDir}:'
                 ls -la ${remoteDir}
                 
