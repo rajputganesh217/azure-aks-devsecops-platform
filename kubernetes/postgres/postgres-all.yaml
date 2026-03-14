@@ -8,7 +8,7 @@ spec:
   parameters:
     usePodIdentity: "false"
     useVMManagedIdentity: "true" 
-    userAssignedIdentityID: "" 
+    userAssignedIdentityID: "ba5e5ce1-083d-4b27-8e1f-91bfa3fa1203" 
     keyvaultName: "dev-devsecops-kv"
     objects: |
       array:
