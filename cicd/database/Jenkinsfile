@@ -89,15 +89,8 @@ def createSecret() {
                 set -e
                 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                 
-                # Create postgres-secret
-                if [ \"${params.GENERATE_SECRET}\" = \"true\" ] || ! kubectl get secret postgres-secret -n ${NAMESPACE} > /dev/null 2>&1; then
-                    echo \"Creating/Updating postgres-secret in namespace ${NAMESPACE}...\"
-                    kubectl delete secret postgres-secret -n ${NAMESPACE} --ignore-not-found
-                    kubectl create secret generic postgres-secret -n ${NAMESPACE} \\
-                      --from-literal=POSTGRES_DB=${POSTGRES_DB} \\
-                      --from-literal=POSTGRES_USER=${POSTGRES_USER} \\
-                      --from-literal=POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-                fi
+                # Let Secrets Store CSI driver manage postgres-secret from Key Vault.
+                # Only creating TLS secret manually if required.
                 
                 # Create TLS secret (self-signed wildcard cert) for HTTPS
                 if [ \"${params.GENERATE_SECRET}\" = \"true\" ] || ! kubectl get secret microservices-tls-secret -n ${NAMESPACE} > /dev/null 2>&1; then
