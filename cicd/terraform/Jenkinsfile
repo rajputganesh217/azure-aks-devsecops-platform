@@ -163,17 +163,15 @@ def prepareStaticIPs() {
 }
 
 def runCheckovScan() {
-
-
-sh """
-checkov -d ${env.TF_DIR} \
-  --framework terraform \
-  --quiet \
-  -o json \
-  > security-reports/checkov-${params.ENVIRONMENT}.json || true
-"""
-
-
+    sh """
+    echo "Starting Security Scan: Checkov"
+    if command -v checkov > /dev/null; then
+        checkov -d ${env.TF_DIR} --framework terraform --quiet -o json > security-reports/checkov-${params.ENVIRONMENT}.json || true
+    else
+        echo "Checkov binary not found on agent. Attempting Docker fallback..."
+        docker run --rm -v \$(pwd):/tf bridgecrew/checkov -d /tf/${env.TF_DIR} --framework terraform --quiet -o json > security-reports/checkov-${params.ENVIRONMENT}.json || true
+    fi
+    """
 }
 
 def runGitleaksScan() {
