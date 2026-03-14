@@ -140,15 +140,20 @@ def deployPostgres() {
 
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
         sh """
-        ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
-        scp -o StrictHostKeyChecking=no -i \${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
+            set -ex
+            ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
+            scp -o StrictHostKeyChecking=no -i \${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
 
-        ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
-            kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-            kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
-            kubectl rollout status deployment/postgres -n ${NAMESPACE} --timeout=300s
-            rm -rf ${remoteDir}
-        "
+            ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
+                set -ex
+                echo 'Listing files to be applied from ${remoteDir}:'
+                ls -la ${remoteDir}
+                
+                kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
+                kubectl rollout status deployment/postgres -n ${NAMESPACE} --timeout=300s
+                rm -rf ${remoteDir}
+            "
         """
     }
 }
