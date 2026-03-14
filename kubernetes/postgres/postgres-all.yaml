@@ -50,8 +50,6 @@ kind: Deployment
 metadata:
   name: postgres
   namespace: dev
-  annotations:
-    deployment.kubernetes.io/reversion: "v2" # Force update change
 spec:
   replicas: 1
   selector:
@@ -82,6 +80,9 @@ spec:
           allowPrivilegeEscalation: false
           runAsNonRoot: true
           runAsUser: 999 
+      
+      securityContext:
+        fsGroup: 999
         
         resources:
           limits:

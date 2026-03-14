@@ -82,11 +82,11 @@ pipeline {
 def createSecret() {
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
         sh """
-            set -ex
+            set -e
             scp -o StrictHostKeyChecking=no -i \${SSH_KEY} ${K8S_DIR}/openssl.cnf ${JUMP_USER}@${JUMP_SERVER_IP}:/tmp/openssl-san.cnf
 
             ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
-                set -ex
+                set -e
                 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                 
                 # Create postgres-secret
@@ -97,8 +97,6 @@ def createSecret() {
                       --from-literal=POSTGRES_DB=${POSTGRES_DB} \\
                       --from-literal=POSTGRES_USER=${POSTGRES_USER} \\
                       --from-literal=POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-                else
-                    echo \"postgres-secret already exists. Skipping creation.\"
                 fi
                 
                 # Create TLS secret (self-signed wildcard cert) for HTTPS
@@ -141,9 +139,8 @@ def deployPostgres() {
 
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
         sh """
-            set -ex
+            set -e
             # Perform variable substitution locally on the Jenkins agent
-            echo "Performing variable substitution on manifests..."
             for f in ${K8S_DIR}/*.yaml; do
                 envsubst '\$AZURE_TENANT_ID,\$CSI_IDENTITY_CLIENT_ID' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
             done
@@ -152,10 +149,7 @@ def deployPostgres() {
             scp -o StrictHostKeyChecking=no -i \${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
 
             ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
-                set -ex
-                echo 'Listing files to be applied from ${remoteDir}:'
-                ls -la ${remoteDir}
-                
+                set -e
                 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                 kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
                 kubectl rollout status deployment/postgres -n ${NAMESPACE} --timeout=300s
