@@ -79,15 +79,13 @@ spec:
           readOnly: true
         securityContext:   
           allowPrivilegeEscalation: false
-          runAsNonRoot: true
-          runAsUser: 999 
         resources:          
           limits:
-            cpu: "100m"
-            memory: "128Mi"
+            cpu: "200m"
+            memory: "256Mi"
           requests:
-            cpu: "10m"
-            memory: "64Mi"
+            cpu: "50m"
+            memory: "128Mi"
         livenessProbe:      
           exec:
             command:
