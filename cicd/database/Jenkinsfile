@@ -142,16 +142,17 @@ def deployPostgres() {
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
         sh """
             set -ex
+            # Perform variable substitution locally on the Jenkins agent
+            echo "Performing variable substitution on manifests..."
+            for f in ${K8S_DIR}/*.yaml; do
+                envsubst '\$AZURE_TENANT_ID,\$CSI_IDENTITY_CLIENT_ID' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
+            done
+
             ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
             scp -o StrictHostKeyChecking=no -i \${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
 
             ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
                 set -ex
-                echo 'Performing variable substitution on manifests in ${remoteDir}...'
-                for f in ${remoteDir}/*.yaml; do
-                    envsubst '${AZURE_TENANT_ID},${CSI_IDENTITY_CLIENT_ID}' < \"\$f\" > \"\$f.tmp\" && mv \"\$f.tmp\" \"\$f\"
-                done
-
                 echo 'Listing files to be applied from ${remoteDir}:'
                 ls -la ${remoteDir}
                 
