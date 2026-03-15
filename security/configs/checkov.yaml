@@ -2,8 +2,8 @@ framework:
   - terraform
 
 skip-check:
-  - CKV_AZURE_35
-  - CKV_AZURE_117
+  - CKV_AZURE_35  #Commonly related to Public Network Access
+  - CKV_AZURE_117 #Commonly related to Azure Disk Encryption
 
 soft-fail: true
 

@@ -38,20 +38,12 @@ stages {
         }
     }
 
-    stage('Security Scans') {
+    stage('Checkov Scan') {
+        steps { script { runCheckovScan() } }
+    }
 
-        parallel {
-
-            stage('Checkov Scan') {
-                steps { script { runCheckovScan() } }
-            }
-
-            stage('Gitleaks Scan') {
-                steps { script { runGitleaksScan() } }
-            }
-
-        }
-
+    stage('Gitleaks Scan') {
+        steps { script { runGitleaksScan() } }
     }
 
 
@@ -63,39 +55,27 @@ stages {
         steps { script { terraformInit() } }
     }
 
-    stage('Terraform Quality Checks') {
+    stage('Terraform Format') {
+        steps { script { terraformFmt() } }
+    }
 
-        parallel {
-
-            stage('Terraform Format') {
-                steps { script { terraformFmt() } }
-            }
-
-            stage('Terraform Validate') {
-                steps { script { terraformValidate() } }
-            }
-
-        }
-
+    stage('Terraform Validate') {
+        steps { script { terraformValidate() } }
     }
 
     stage('Terraform Plan') {
-
-        when {
-            expression { params.ACTION != 'destroy' }
-        }
-
         steps { script { terraformPlan() } }
     }
 
     stage('Approval Gate') {
-
         when {
-            expression { params.ACTION == 'apply' }
+            expression { params.ACTION == 'apply' || params.ACTION == 'destroy' }
         }
-
         steps {
-            input message: "Approve deployment to ${params.ENVIRONMENT} based on the Terraform Plan above?"
+            script {
+                def warning = params.ACTION == 'destroy' ? "!!! DESTROY ALL RESOURCES !!!" : "deploy"
+                input message: "Approve ${warning} in ${params.ENVIRONMENT} based on the plan above?"
+            }
         }
     }
 
@@ -226,8 +206,9 @@ dir("${env.TF_DIR}") {
 
 def terraformPlan() {
     dir("${env.TF_DIR}") {
+        def destroyFlag = params.ACTION == 'destroy' ? "-destroy" : ""
         sh """
-        terraform plan \
+        terraform plan ${destroyFlag} \
           -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
           -var='commit_id=${env.COMMIT_ID}' \
           -out=tfplan-${params.ENVIRONMENT}.out
@@ -237,16 +218,8 @@ def terraformPlan() {
 
 def terraformExecute() {
     dir("${env.TF_DIR}") {
-        if (params.ACTION == 'apply') {
+        if (params.ACTION == 'apply' || params.ACTION == 'destroy') {
             sh "terraform apply -auto-approve tfplan-${params.ENVIRONMENT}.out"
-        }
-        else if (params.ACTION == 'destroy') {
-            sh """
-            terraform destroy \
-              -auto-approve \
-              -var-file=tfvars/${params.ENVIRONMENT}.tfvars \
-              -var='commit_id=${env.COMMIT_ID}'
-            """
         }
     }
 }

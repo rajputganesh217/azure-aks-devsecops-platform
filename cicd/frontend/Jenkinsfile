@@ -38,17 +38,14 @@ pipeline {
             steps { script { prepareWorkspace() } }
         }
 
-        stage('Security Scans') {
-            when { expression { params.ENVIRONMENT == 'dev' } }
-            parallel {
-                stage('Gitleaks Scan') {
-                    steps { script { runGitleaksScan() } }
-                }
-                stage('Dependency Check') {
-                    steps { script { runDependencyCheck() } }
-                }
-            }
-        }
+    stage('Gitleaks Scan') {
+        when { expression { params.ENVIRONMENT == 'dev' } }
+        steps { script { runGitleaksScan() } }
+    }
+    stage('Dependency Check') {
+        when { expression { params.ENVIRONMENT == 'dev' } }
+        steps { script { runDependencyCheck() } }
+    }
 
         stage('Security: Manifest Scan') {
             when { expression { params.ENVIRONMENT == 'dev' } }
@@ -175,10 +172,11 @@ def deployToAKS() {
                     envsubst '\$IMAGE_TAG,\$HOSTNAME,\$NAMESPACE' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
                 done
 
-                ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
-                scp -o StrictHostKeyChecking=no -i \${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
+                ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${JUMP_SERVER_IP}" || true
+                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
+                scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
 
-                ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
+                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
                     set -e
                     kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                     kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
