@@ -100,8 +100,8 @@ pipeline {
 // ──────────────────────────────────────────────
 
 def prepareWorkspace() {
-    env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
-    env.DEPLOY_COMMIT = (params.PROMOTE_COMMIT_ID && params.PROMOTE_COMMIT_ID.trim() != '') ? params.PROMOTE_COMMIT_ID : env.COMMIT_ID
+    env.COMMIT_ID = sh(script: "git rev-parse HEAD", returnStdout: true).trim().take(8)
+    env.DEPLOY_COMMIT = (params.PROMOTE_COMMIT_ID && params.PROMOTE_COMMIT_ID.trim() != '') ? params.PROMOTE_COMMIT_ID.trim().take(8) : env.COMMIT_ID
 
     // New Tagging Format: service-env-hash
     env.IMAGE_TAG = "${env.IMAGE_NAME}:${env.APP_NAME}-${params.ENVIRONMENT}-${env.DEPLOY_COMMIT}"
