@@ -141,15 +141,17 @@ def deployPostgres() {
             CSI_IDENTITY_CLIENT_ID=\$(az aks show -g ${AKS_RESOURCE_GROUP} -n ${AKS_CLUSTER_NAME} --query "addonProfiles.azureKeyvaultSecretsProvider.identity.clientId" -o tsv)
             export CSI_IDENTITY_CLIENT_ID
             echo "Fetched CSI_IDENTITY_CLIENT_ID: \$CSI_IDENTITY_CLIENT_ID"
+            
+            export KEYVAULT_NAME="${params.ENVIRONMENT}-devsecops-kv"
 
             # Perform variable substitution locally on the Jenkins agent
-            for f in ${K8S_DIR}/*.yaml; do
-                envsubst '\$AZURE_TENANT_ID,\$CSI_IDENTITY_CLIENT_ID,\$NAMESPACE' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
+            for f in ${K8S_DIR}/*.yaml kubernetes/network-policies.yaml; do
+                envsubst '\$AZURE_TENANT_ID,\$CSI_IDENTITY_CLIENT_ID,\$NAMESPACE,\$KEYVAULT_NAME' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
             done
 
             ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${JUMP_SERVER_IP}" || true
             ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
-            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
+            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/*.yaml kubernetes/network-policies.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
 
             ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
                 set -e

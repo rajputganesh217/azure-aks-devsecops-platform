@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-all
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   podSelector: {}
   policyTypes:
@@ -13,7 +13,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-frontend-ingress
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   podSelector:
     matchLabels:
@@ -36,7 +36,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-backend-from-frontend
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   podSelector:
     matchLabels:
@@ -44,6 +44,10 @@ spec:
   policyTypes:
     - Ingress
   ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
     - from:
         - podSelector:
             matchLabels:
@@ -56,7 +60,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-postgres-from-backend-worker
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   podSelector:
     matchLabels:
@@ -79,7 +83,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-egress-dns
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   podSelector: {}
   policyTypes:
@@ -100,7 +104,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-frontend-egress-to-backend
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   podSelector:
     matchLabels:
@@ -120,7 +124,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-backend-worker-egress-to-postgres
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   podSelector:
     matchLabels:
@@ -140,7 +144,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-worker-egress-to-postgres
-  namespace: dev
+  namespace: ${NAMESPACE}
 spec:
   podSelector:
     matchLabels:

@@ -9,7 +9,7 @@ spec:
     usePodIdentity: "false"
     useVMManagedIdentity: "true" 
     userAssignedIdentityID: "${CSI_IDENTITY_CLIENT_ID}" 
-    keyvaultName: "dev-devsecops-kv"
+    keyvaultName: "${KEYVAULT_NAME}"
     objects: |
       array:
         - |

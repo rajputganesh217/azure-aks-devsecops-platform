@@ -2,7 +2,9 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: shoe-ingress
+  namespace: ${NAMESPACE}
   annotations:
+    appgw.ingress.kubernetes.io/backend-protocol: "http"
     appgw.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   ingressClassName: azure-application-gateway
