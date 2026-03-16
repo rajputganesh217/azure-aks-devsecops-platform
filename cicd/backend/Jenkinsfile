@@ -180,7 +180,7 @@ def dockerPullTagPush() {
 def azAcrLogin() {
     sh """
         az login --service-principal -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID}
-        az acr login --name ${ACR_NAME}
+        az acr login --name ${env.ACR_NAME}
     """
 }
 
@@ -219,13 +219,13 @@ def uploadSecurityReports() {
     # Clear Azure CLI cache to avoid AttributeError issues
     rm -rf ~/.azure/msal_http_cache.bin || true
 
-    ACCOUNT_KEY=\$(az storage account keys list --account-name ${STORAGE_ACCOUNT} --query "[0].value" -o tsv)
+    ACCOUNT_KEY=\$(az storage account keys list --account-name ${env.STORAGE_ACCOUNT} --query "[0].value" -o tsv)
 
     az storage blob upload-batch \\
-      --account-name ${STORAGE_ACCOUNT} \\
+      --account-name ${env.STORAGE_ACCOUNT} \\
       --account-key \$ACCOUNT_KEY \\
       --destination security-reports \\
-      --destination-path ${APP_NAME}/${env.COMMIT_ID} \\
+      --destination-path ${env.APP_NAME}/${env.COMMIT_ID} \\
       --source security-reports \\
       --auth-mode key || true
     """
