@@ -16,7 +16,7 @@ pipeline {
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        NAMESPACE = "${params.ENVIRONMENT}"
+
 
         JUMP_SERVER_IP = credentials('JUMP_SERVER_IP')
         JUMP_USER      = "ganesh"
