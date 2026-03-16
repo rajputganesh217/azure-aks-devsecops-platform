@@ -29,7 +29,7 @@ spec:
         - ipBlock:
             cidr: 0.0.0.0/0 # Allow public traffic via AppGW
       ports:
-        - protocol: Tcp
+        - protocol: TCP
           port: 8080
 ---
 apiVersion: networking.k8s.io/v1
@@ -53,7 +53,7 @@ spec:
             matchLabels:
               app: shoe-frontend
       ports:
-        - protocol: Tcp
+        - protocol: TCP
           port: 5000
 ---
 apiVersion: networking.k8s.io/v1
@@ -76,7 +76,7 @@ spec:
             matchLabels:
               app: worker
       ports:
-        - protocol: Tcp
+        - protocol: TCP
           port: 5432
 ---
 apiVersion: networking.k8s.io/v1
