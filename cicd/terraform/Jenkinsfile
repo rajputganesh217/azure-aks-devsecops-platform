@@ -155,16 +155,23 @@ def runCheckovScan() {
 }
 
 def runGitleaksScan() {
-
-
-sh """
-gitleaks detect \
-  --source . \
-  --report-format json \
-  --report-path security-reports/gitleaks.json || true
-"""
-
-
+    sh """
+    echo "Starting Security Scan: Gitleaks"
+    gitleaks detect \
+      --source . \
+      --report-format json \
+      --report-path security-reports/gitleaks.json || true
+    
+    if [ -f security-reports/gitleaks.json ]; then
+        echo "Gitleaks Scan Results Summary:"
+        # Use jq to summarize if available, otherwise just count lines
+        if command -v jq > /dev/null; then
+            jq 'length' security-reports/gitleaks.json || echo "0 secrets found"
+        else
+            grep -c "Fingerprint" security-reports/gitleaks.json || echo "0 secrets found"
+        fi
+    fi
+    """
 }
 
 def terraformInit() {

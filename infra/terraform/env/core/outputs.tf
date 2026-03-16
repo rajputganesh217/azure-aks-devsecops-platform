@@ -18,4 +18,6 @@ output "jump_server_ip" {
   value = module.jump_server.public_ip
 }
 
-
+output "csi_identity_client_id" {
+  value = module.aks.key_vault_secrets_provider_identity_client_id
+}

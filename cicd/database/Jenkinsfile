@@ -8,17 +8,16 @@ pipeline {
 
     environment {
         K8S_DIR = "kubernetes/postgres"
-        STORAGE_ACCOUNT = "devdevsecopsrep"
+        STORAGE_ACCOUNT = "${params.ENVIRONMENT}devsecopsrep"
         NAMESPACE = "${params.ENVIRONMENT}"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
-        CSI_IDENTITY_CLIENT_ID = credentials('CSI_IDENTITY_CLIENT_ID')
 
-        AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
-        AKS_CLUSTER_NAME   = "microservices-aks"
+        AKS_RESOURCE_GROUP = "aks-microservices-${params.ENVIRONMENT}-rg"
+        AKS_CLUSTER_NAME   = "microservices-aks${params.ENVIRONMENT == 'dev' ? '' : '-' + params.ENVIRONMENT}"
 
         JUMP_SERVER_IP = credentials('JUMP_SERVER_IP')
         JUMP_USER      = "ganesh"
@@ -134,6 +133,15 @@ def deployPostgres() {
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
         sh """
             set -e
+            
+            az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+            az account set --subscription $AZURE_SUBSCRIPTION_ID
+            
+            # Fetch CSI Identity Client ID dynamically
+            CSI_IDENTITY_CLIENT_ID=\$(az aks show -g ${AKS_RESOURCE_GROUP} -n ${AKS_CLUSTER_NAME} --query "addonProfiles.azureKeyvaultSecretsProvider.identity.clientId" -o tsv)
+            export CSI_IDENTITY_CLIENT_ID
+            echo "Fetched CSI_IDENTITY_CLIENT_ID: \$CSI_IDENTITY_CLIENT_ID"
+
             # Perform variable substitution locally on the Jenkins agent
             for f in ${K8S_DIR}/*.yaml; do
                 envsubst '\$AZURE_TENANT_ID,\$CSI_IDENTITY_CLIENT_ID,\$NAMESPACE' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
