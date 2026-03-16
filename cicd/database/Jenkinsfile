@@ -16,8 +16,8 @@ pipeline {
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        AKS_RESOURCE_GROUP = "aks-microservices-${params.ENVIRONMENT}-rg"
-        AKS_CLUSTER_NAME   = params.ENVIRONMENT == 'dev' ? 'microservices-aks' : "microservices-aks-${params.ENVIRONMENT}"
+        AKS_RESOURCE_GROUP    = ""
+        AKS_CLUSTER_NAME      = ""
 
         JUMP_SERVER_IP = credentials('JUMP_SERVER_IP')
         JUMP_USER      = "ganesh"
@@ -31,6 +31,8 @@ pipeline {
         stage('Prepare') {
             steps {
                 script {
+                    env.AKS_RESOURCE_GROUP = "aks-microservices-${params.ENVIRONMENT}-rg"
+                    env.AKS_CLUSTER_NAME   = (params.ENVIRONMENT == 'dev') ? 'microservices-aks' : "microservices-aks-${params.ENVIRONMENT}"
                     env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
                     sh "rm -rf security-reports && mkdir -p security-reports"
                 }

@@ -15,10 +15,10 @@ pipeline {
         DOCKER_CREDS_ID = "azure-acr-credentials"
         SONAR_PROJECT_KEY = "${APP_NAME}-service"
         SONAR_SERVER_ID   = "sonarqube"
-        STORAGE_ACCOUNT = "${params.ENVIRONMENT}devsecopsrep"
-        ACR_NAME   = params.ENVIRONMENT == 'dev' ? 'mydevopsacr123' : "mydevopsacr${params.ENVIRONMENT}123"
-        REGISTRY   = "${ACR_NAME}.azurecr.io"
-        IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
+        STORAGE_ACCOUNT = ""
+        ACR_NAME        = ""
+        REGISTRY        = ""
+        IMAGE_NAME      = ""
         NAMESPACE  = "${params.ENVIRONMENT}"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
@@ -26,8 +26,8 @@ pipeline {
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        AKS_RESOURCE_GROUP = "aks-microservices-${params.ENVIRONMENT}-rg"
-        AKS_CLUSTER_NAME   = params.ENVIRONMENT == 'dev' ? 'microservices-aks' : "microservices-aks-${params.ENVIRONMENT}"
+        AKS_RESOURCE_GROUP = ""
+        AKS_CLUSTER_NAME   = ""
 
         JUMP_SERVER_IP = credentials('JUMP_SERVER_IP')
         JUMP_USER      = "ganesh"
@@ -100,6 +100,13 @@ pipeline {
 // ──────────────────────────────────────────────
 
 def prepareWorkspace() {
+    env.STORAGE_ACCOUNT = "${params.ENVIRONMENT}devsecopsrep"
+    env.ACR_NAME = (params.ENVIRONMENT == 'dev') ? 'mydevopsacr123' : "mydevopsacr${params.ENVIRONMENT}123"
+    env.REGISTRY = "${env.ACR_NAME}.azurecr.io"
+    env.IMAGE_NAME = "${env.REGISTRY}/${env.APP_NAME}"
+    env.AKS_RESOURCE_GROUP = "aks-microservices-${params.ENVIRONMENT}-rg"
+    env.AKS_CLUSTER_NAME = (params.ENVIRONMENT == 'dev') ? 'microservices-aks' : "microservices-aks-${params.ENVIRONMENT}"
+
     env.COMMIT_ID = sh(script: "git rev-parse HEAD", returnStdout: true).trim().take(8)
     env.DEPLOY_COMMIT = (params.PROMOTE_COMMIT_ID && params.PROMOTE_COMMIT_ID.trim() != '') ? params.PROMOTE_COMMIT_ID.trim().take(8) : env.COMMIT_ID
 
