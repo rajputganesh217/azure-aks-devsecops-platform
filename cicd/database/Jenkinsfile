@@ -8,7 +8,7 @@ pipeline {
 
     environment {
         K8S_DIR = "kubernetes/postgres"
-        STORAGE_ACCOUNT = "${params.ENVIRONMENT}devsecopsrep"
+        STORAGE_ACCOUNT = "devdevsecopsrep"
         NAMESPACE = "${params.ENVIRONMENT}"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
@@ -16,8 +16,8 @@ pipeline {
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        AKS_RESOURCE_GROUP = "aks-microservices-${params.ENVIRONMENT}-rg"
-        AKS_CLUSTER_NAME   = "microservices-aks${params.ENVIRONMENT == 'dev' ? '' : '-' + params.ENVIRONMENT}"
+        AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
+        AKS_CLUSTER_NAME   = "microservices-aks"
 
         JUMP_SERVER_IP = credentials('JUMP_SERVER_IP')
         JUMP_USER      = "ganesh"
