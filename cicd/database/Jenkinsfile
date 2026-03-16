@@ -16,8 +16,8 @@ pipeline {
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
-        AKS_CLUSTER_NAME   = "microservices-aks"
+        AKS_RESOURCE_GROUP = "aks-microservices-${params.ENVIRONMENT}-rg"
+        AKS_CLUSTER_NAME   = params.ENVIRONMENT == 'dev' ? 'microservices-aks' : "microservices-aks-${params.ENVIRONMENT}"
 
         JUMP_SERVER_IP = credentials('JUMP_SERVER_IP')
         JUMP_USER      = "ganesh"

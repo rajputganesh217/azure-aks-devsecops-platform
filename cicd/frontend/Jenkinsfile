@@ -12,10 +12,11 @@ pipeline {
         APP_NAME = "frontend"
         APP_DIR  = "app/${APP_NAME}"
         K8S_DIR  = "kubernetes/${APP_NAME}"
-        STORAGE_ACCOUNT = "devdevsecopsrep"
+        STORAGE_ACCOUNT = "${params.ENVIRONMENT}devsecopsrep"
+        ACR_NAME   = params.ENVIRONMENT == 'dev' ? 'mydevopsacr123' : "mydevopsacr${params.ENVIRONMENT}123"
         DOCKER_CREDS_ID = "azure-acr-credentials"
 
-        REGISTRY   = "mydevopsacr123.azurecr.io"
+        REGISTRY   = "${ACR_NAME}.azurecr.io"
         IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
         NAMESPACE  = "${params.ENVIRONMENT}"
 
@@ -24,8 +25,8 @@ pipeline {
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
-        AKS_CLUSTER_NAME   = "microservices-aks"
+        AKS_RESOURCE_GROUP = "aks-microservices-${params.ENVIRONMENT}-rg"
+        AKS_CLUSTER_NAME   = params.ENVIRONMENT == 'dev' ? 'microservices-aks' : "microservices-aks-${params.ENVIRONMENT}"
 
         JUMP_SERVER_IP = credentials('JUMP_SERVER_IP')
         JUMP_USER      = "ganesh"
@@ -155,7 +156,7 @@ def dockerPullTagPush() {
 def azAcrLogin() {
     sh """
         az login --service-principal -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID}
-        az acr login --name mydevopsacr123
+        az acr login --name ${ACR_NAME}
     """
 }
 

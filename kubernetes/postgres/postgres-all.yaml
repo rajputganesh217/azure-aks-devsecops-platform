@@ -13,24 +13,24 @@ spec:
     objects: |
       array:
         - |
-          objectName: POSTGRES-DB
+          objectName: postgres-db
           objectType: secret
         - |
-          objectName: POSTGRES-USER
+          objectName: postgres-user
           objectType: secret
         - |
-          objectName: POSTGRES-PASSWORD
+          objectName: postgres-password
           objectType: secret
     tenantId: "${AZURE_TENANT_ID}"
   secretObjects:
     - secretName: postgres-secret
       type: Opaque
       data:
-        - objectName: POSTGRES-DB
+        - objectName: postgres-db
           key: POSTGRES_DB
-        - objectName: POSTGRES-USER
+        - objectName: postgres-user
           key: POSTGRES_USER
-        - objectName: POSTGRES-PASSWORD
+        - objectName: postgres-password
           key: POSTGRES_PASSWORD
 ---
 apiVersion: v1
