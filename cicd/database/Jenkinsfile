@@ -171,10 +171,11 @@ def deployPostgres() {
                 if [ \$RESULT -eq 0 ]; then
                     az keyvault secret set --vault-name "\${KEYVAULT_NAME}" --name "postgres-user" --value "\${POSTGRES_USER}" >/dev/null
                     az keyvault secret set --vault-name "\${KEYVAULT_NAME}" --name "postgres-password" --value "\${POSTGRES_PASSWORD}" >/dev/null
-                    echo "Secrets successfully populated!"
+                    echo "Secrets successfully populated! Waiting 60s for role assignment propagation to AKS CSI driver..."
+                    sleep 60
                     break
                 else
-                    echo "Waiting 20s for Azure RBAC propagation... (Attempt \$i/6)"
+                    echo "Waiting 20s for Azure RBAC propagation to allow Secret Creation... (Attempt \$i/6)"
                     sleep 20
                 fi
             done
@@ -192,7 +193,7 @@ def deployPostgres() {
                 set -e
                 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                 kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
-                kubectl rollout status deployment/postgres -n ${NAMESPACE} --timeout=300s
+                kubectl rollout status deployment/postgres -n ${NAMESPACE} --timeout=600s
                 rm -rf ${remoteDir}
             "
         """
