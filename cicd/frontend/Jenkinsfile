@@ -12,21 +12,21 @@ pipeline {
         APP_NAME = "frontend"
         APP_DIR  = "app/${APP_NAME}"
         K8S_DIR  = "kubernetes/${APP_NAME}"
-        STORAGE_ACCOUNT = ""
-        ACR_NAME        = ""
-        DOCKER_CREDS_ID = "azure-acr-credentials"
-
-        REGISTRY   = ""
-        IMAGE_NAME = ""
+        SONAR_PROJECT_KEY = "${APP_NAME}-service"
+        SONAR_SERVER_ID   = "sonarqube"
         NAMESPACE  = "${params.ENVIRONMENT}"
+
+        STORAGE_ACCOUNT = "devdevsecopsrep"
+        ACR_NAME = "mydevopsacr123"
+        REGISTRY = "${ACR_NAME}.azurecr.io"
+        IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
+        AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
+        AKS_CLUSTER_NAME = "microservices-aks"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
-
-        AKS_RESOURCE_GROUP = ""
-        AKS_CLUSTER_NAME   = ""
 
         JUMP_SERVER_IP = credentials('JUMP_SERVER_IP')
         JUMP_USER      = "ganesh"
@@ -99,13 +99,6 @@ pipeline {
 // ──────────────────────────────────────────────
 
 def prepareWorkspace() {
-    env.STORAGE_ACCOUNT = "devdevsecopsrep"
-    env.ACR_NAME = "mydevopsacr123"
-    env.REGISTRY = "${env.ACR_NAME}.azurecr.io"
-    env.IMAGE_NAME = "${env.REGISTRY}/${env.APP_NAME}"
-    env.AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
-    env.AKS_CLUSTER_NAME = "microservices-aks"
-
     env.COMMIT_ID = sh(script: "git rev-parse HEAD", returnStdout: true).trim().take(8)
     env.DEPLOY_COMMIT = (params.PROMOTE_COMMIT_ID && params.PROMOTE_COMMIT_ID.trim() != '') ? params.PROMOTE_COMMIT_ID.trim().take(8) : env.COMMIT_ID
 
@@ -115,6 +108,7 @@ def prepareWorkspace() {
     sh "rm -rf security-reports && mkdir -p security-reports"
     echo "Environment: ${params.ENVIRONMENT} | Commit: ${env.DEPLOY_COMMIT} | Image: ${env.IMAGE_TAG}"
 }
+
 
 def runGitleaksScan() {
     sh "gitleaks detect --source . --config security/configs/gitleaks.toml --report-format json --report-path security-reports/gitleaks-${APP_NAME}.json || true"
