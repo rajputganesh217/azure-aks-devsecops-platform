@@ -100,12 +100,12 @@ pipeline {
 // ──────────────────────────────────────────────
 
 def prepareWorkspace() {
-    env.STORAGE_ACCOUNT = "${params.ENVIRONMENT}devsecopsrep"
-    env.ACR_NAME = (params.ENVIRONMENT == 'dev') ? 'mydevopsacr123' : "mydevopsacr${params.ENVIRONMENT}123"
+    env.STORAGE_ACCOUNT = "devdevsecopsrep"
+    env.ACR_NAME = "mydevopsacr123"
     env.REGISTRY = "${env.ACR_NAME}.azurecr.io"
     env.IMAGE_NAME = "${env.REGISTRY}/${env.APP_NAME}"
-    env.AKS_RESOURCE_GROUP = "aks-microservices-${params.ENVIRONMENT}-rg"
-    env.AKS_CLUSTER_NAME = (params.ENVIRONMENT == 'dev') ? 'microservices-aks' : "microservices-aks-${params.ENVIRONMENT}"
+    env.AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
+    env.AKS_CLUSTER_NAME = "microservices-aks"
 
     env.COMMIT_ID = sh(script: "git rev-parse HEAD", returnStdout: true).trim().take(8)
     env.DEPLOY_COMMIT = (params.PROMOTE_COMMIT_ID && params.PROMOTE_COMMIT_ID.trim() != '') ? params.PROMOTE_COMMIT_ID.trim().take(8) : env.COMMIT_ID
@@ -179,7 +179,7 @@ def dockerPullTagPush() {
 
 def azAcrLogin() {
     sh """
-        az login --service-principal -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID}
+        az login --service-principal -u ${env.AZURE_CLIENT_ID} -p ${env.AZURE_CLIENT_SECRET} --tenant ${env.AZURE_TENANT_ID}
         az acr login --name ${env.ACR_NAME}
     """
 }

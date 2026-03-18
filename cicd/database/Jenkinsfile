@@ -8,7 +8,6 @@ pipeline {
 
     environment {
         K8S_DIR = "kubernetes/postgres"
-        STORAGE_ACCOUNT = "devdevsecopsrep"
         NAMESPACE = "${params.ENVIRONMENT}"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
@@ -30,8 +29,9 @@ pipeline {
         stage('Prepare') {
             steps {
                 script {
-                    env.AKS_RESOURCE_GROUP = "aks-microservices-${params.ENVIRONMENT}-rg"
-                    env.AKS_CLUSTER_NAME   = (params.ENVIRONMENT == 'dev') ? 'microservices-aks' : "microservices-aks-${params.ENVIRONMENT}"
+                    env.AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
+                    env.AKS_CLUSTER_NAME   = "microservices-aks"
+                    env.STORAGE_ACCOUNT    = "devdevsecopsrep"
                     env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
                     sh "rm -rf security-reports && mkdir -p security-reports"
                 }
@@ -135,8 +135,8 @@ def deployPostgres() {
         sh """
             set -e
             
-            az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
-            az account set --subscription $AZURE_SUBSCRIPTION_ID
+            az login --service-principal -u ${env.AZURE_CLIENT_ID} -p ${env.AZURE_CLIENT_SECRET} --tenant ${env.AZURE_TENANT_ID}
+            az account set --subscription ${env.AZURE_SUBSCRIPTION_ID}
             
             # Fetch CSI Identity Client ID dynamically
             CSI_IDENTITY_CLIENT_ID=\$(az aks show -g ${env.AKS_RESOURCE_GROUP} -n ${env.AKS_CLUSTER_NAME} --query "addonProfiles.azureKeyvaultSecretsProvider.identity.clientId" -o tsv)
@@ -166,19 +166,19 @@ def deployPostgres() {
 }
 
 def uploadReports() {
-    sh '''
+    sh """
     # Clear Azure CLI cache to avoid AttributeError issues
     rm -rf ~/.azure/msal_http_cache.bin || true
 
-    az account set --subscription $AZURE_SUBSCRIPTION_ID
+    az account set --subscription ${env.AZURE_SUBSCRIPTION_ID}
 
-    ACCOUNT_KEY=$(az storage account keys list --account-name $STORAGE_ACCOUNT --query "[0].value" -o tsv)
+    ACCOUNT_KEY=\$(az storage account keys list --account-name ${env.STORAGE_ACCOUNT} --query "[0].value" -o tsv)
 
-    az storage blob upload-batch \
-      --account-name $STORAGE_ACCOUNT \
-      --account-key $ACCOUNT_KEY \
-      --destination security-reports/database/$COMMIT_ID \
-      --source security-reports \
+    az storage blob upload-batch \\
+      --account-name ${env.STORAGE_ACCOUNT} \\
+      --account-key \$ACCOUNT_KEY \\
+      --destination security-reports/database/${env.COMMIT_ID} \\
+      --source security-reports \\
       --auth-mode key || true
-    '''
+    """
 }
