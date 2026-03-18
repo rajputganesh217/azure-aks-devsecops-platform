@@ -13,8 +13,6 @@ pipeline {
         APP_DIR  = "app/${APP_NAME}"
         K8S_DIR  = "kubernetes/${APP_NAME}"
 
-        ACR_NAME   = ""
-        REGISTRY   = ""
         NAMESPACE  = "${params.ENVIRONMENT}"
 
         DOCKER_CREDS_ID = "azure-acr-credentials"
