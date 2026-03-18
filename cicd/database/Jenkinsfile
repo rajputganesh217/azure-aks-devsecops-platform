@@ -138,13 +138,45 @@ def deployPostgres() {
             az login --service-principal -u ${env.AZURE_CLIENT_ID} -p ${env.AZURE_CLIENT_SECRET} --tenant ${env.AZURE_TENANT_ID}
             az account set --subscription ${env.AZURE_SUBSCRIPTION_ID}
             
+            export KEYVAULT_NAME="${params.ENVIRONMENT}-devsecops-kv"
+
+            echo "Ensuring Key Vault \${KEYVAULT_NAME} exists..."
+            KV_EXISTS=\$(az keyvault list -g ${env.AKS_RESOURCE_GROUP} --query "[?name=='\${KEYVAULT_NAME}'].name" -o tsv)
+            if [ -z "\$KV_EXISTS" ]; then
+                echo "Creating Key Vault \${KEYVAULT_NAME}..."
+                az keyvault create --name \${KEYVAULT_NAME} -g ${env.AKS_RESOURCE_GROUP} --location eastus --enable-rbac-authorization true
+                sleep 15
+            fi
+            
+            KV_SCOPE=\$(az keyvault show -n \${KEYVAULT_NAME} --query "id" -o tsv)
+
             # Fetch CSI Identity Client ID dynamically
             CSI_IDENTITY_CLIENT_ID=\$(az aks show -g ${env.AKS_RESOURCE_GROUP} -n ${env.AKS_CLUSTER_NAME} --query "addonProfiles.azureKeyvaultSecretsProvider.identity.clientId" -o tsv)
             export CSI_IDENTITY_CLIENT_ID
             echo "Fetched CSI_IDENTITY_CLIENT_ID: \$CSI_IDENTITY_CLIENT_ID"
-            
-            export KEYVAULT_NAME="${params.ENVIRONMENT}-devsecops-kv"
 
+            echo "Assigning Roles..."
+            az role assignment create --role "Key Vault Administrator" --assignee "${env.AZURE_CLIENT_ID}" --scope "\$KV_SCOPE" || true
+            az role assignment create --role "Key Vault Secrets User" --assignee "\$CSI_IDENTITY_CLIENT_ID" --scope "\$KV_SCOPE" || true
+
+            echo "Populating Secrets in \${KEYVAULT_NAME} (waiting for RBAC propagation)..."
+            for i in {1..6}; do
+                set +e
+                az keyvault secret set --vault-name "\${KEYVAULT_NAME}" --name "postgres-db" --value "\${POSTGRES_DB}" >/dev/null 2>&1
+                RESULT=\$?
+                set -e
+                
+                if [ \$RESULT -eq 0 ]; then
+                    az keyvault secret set --vault-name "\${KEYVAULT_NAME}" --name "postgres-user" --value "\${POSTGRES_USER}" >/dev/null
+                    az keyvault secret set --vault-name "\${KEYVAULT_NAME}" --name "postgres-password" --value "\${POSTGRES_PASSWORD}" >/dev/null
+                    echo "Secrets successfully populated!"
+                    break
+                else
+                    echo "Waiting 20s for Azure RBAC propagation... (Attempt \$i/6)"
+                    sleep 20
+                fi
+            done
+            
             # Perform variable substitution locally on the Jenkins agent
             for f in ${K8S_DIR}/*.yaml kubernetes/network-policies.yaml; do
                 envsubst '\$AZURE_TENANT_ID,\$CSI_IDENTITY_CLIENT_ID,\$NAMESPACE,\$KEYVAULT_NAME' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
