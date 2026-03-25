@@ -1,0 +1,114 @@
+pipeline {
+    agent any
+
+    options {
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    parameters {
+        choice(name: 'ACTION', choices: ['plan','apply','destroy'], description: 'Terraform action')
+    }
+
+    environment {
+        TF_DIR = "infra/terraform/env/persistent"
+
+        ARM_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
+        ARM_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
+        ARM_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
+        ARM_TENANT_ID       = credentials('AZURE_TENANT_ID')
+    }
+
+    stages {
+        stage('Prepare') {
+            steps {
+                sh 'rm -rf security-reports && mkdir -p security-reports'
+            }
+        }
+
+        stage('Security Scans') {
+            parallel {
+                stage('Gitleaks') {
+                    steps {
+                        sh """
+                        gitleaks detect --source . \
+                          --report-format json \
+                          --report-path security-reports/gitleaks-persistent.json || true
+                        """
+                    }
+                }
+                stage('Checkov') {
+                    steps {
+                        sh """
+                        if command -v checkov > /dev/null; then
+                            checkov -d ${TF_DIR} --framework terraform --quiet \
+                              -o json > security-reports/checkov-persistent.json || true
+                        else
+                            docker run --rm -v \$(pwd):/tf bridgecrew/checkov \
+                              -d /tf/${TF_DIR} --framework terraform --quiet \
+                              -o json > security-reports/checkov-persistent.json || true
+                        fi
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                dir("${TF_DIR}") {
+                    sh """
+                    terraform init \
+                      -backend-config=${WORKSPACE}/backend/persistent.conf \
+                      -reconfigure
+                    """
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                dir("${TF_DIR}") {
+                    script {
+                        def destroyFlag = params.ACTION == 'destroy' ? "-destroy" : ""
+                        sh "terraform plan ${destroyFlag} -out=persistent.tfplan"
+                    }
+                }
+            }
+        }
+
+        stage('Approval') {
+            when {
+                expression { params.ACTION == 'apply' || params.ACTION == 'destroy' }
+            }
+            steps {
+                script {
+                    def warning = params.ACTION == 'destroy' ? "!!! DESTROY PERSISTENT INFRA !!!" : "deploy Persistent Infrastructure"
+                    input message: "Approve ${warning}?"
+                }
+            }
+        }
+
+        stage('Terraform Execute') {
+            when {
+                expression { params.ACTION == 'apply' || params.ACTION == 'destroy' }
+            }
+            steps {
+                dir("${TF_DIR}") {
+                    sh "terraform apply -auto-approve persistent.tfplan"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: 'security-reports/**', allowEmptyArchive: true
+            cleanWs()
+        }
+        success { echo "Persistent infrastructure pipeline completed successfully" }
+        failure { echo "Persistent infrastructure pipeline failed" }
+    }
+}

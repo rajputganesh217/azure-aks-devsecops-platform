@@ -1,0 +1,32 @@
+# Umbrella chart values — override sub-chart defaults per environment
+# Usage: helm install platform . -n dev -f values-dev.yaml
+
+postgres:
+  csi:
+    tenantId: ""
+    clientId: ""
+    keyvaultName: "dev-devsecops-kv"
+  storage:
+    size: 5Gi
+
+backend:
+  replicaCount: 1
+  image:
+    repository: mydevopsacr123.azurecr.io/backend
+    tag: "latest"
+  ingress:
+    host: "api-dev.microservices.local"
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: mydevopsacr123.azurecr.io/frontend
+    tag: "latest"
+  ingress:
+    host: "dev.microservices.local"
+
+worker:
+  replicaCount: 1
+  image:
+    repository: mydevopsacr123.azurecr.io/worker
+    tag: "latest"

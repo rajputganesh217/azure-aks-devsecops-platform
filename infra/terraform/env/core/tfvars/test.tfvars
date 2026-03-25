@@ -9,7 +9,8 @@ node_count = 1
 vm_size             = "Standard_D2s_v3"
 jump_server_vm_size = "Standard_D2s_v3"
 
-acr_name = "mydevopsacrtest123"
+acr_name = "mydevopsacr123"
+reports_storage_account_name = "devdevsecopsrep"
 
 environment        = "test"
 vnet_address_space = ["10.0.0.0/16"]

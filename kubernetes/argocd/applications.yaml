@@ -1,0 +1,58 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/rajputganesh217/azure-aks-devsecops-platform.git"
+    targetRevision: main
+    path: kubernetes/charts/platform
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-qa
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/rajputganesh217/azure-aks-devsecops-platform.git"
+    targetRevision: main
+    path: kubernetes/charts/platform
+    helm:
+      parameters:
+        - name: backend.image.tag
+          value: "latest"
+        - name: frontend.image.tag
+          value: "latest"
+        - name: worker.image.tag
+          value: "latest"
+        - name: backend.ingress.host
+          value: "api-qa.microservices.local"
+        - name: frontend.ingress.host
+          value: "qa.microservices.local"
+        - name: postgres.csi.keyvaultName
+          value: "qa-devsecops-kv"
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: qa
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

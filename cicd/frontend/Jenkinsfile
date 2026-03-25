@@ -16,21 +16,19 @@ pipeline {
         SONAR_SERVER_ID   = "sonarqube"
         NAMESPACE  = "${params.ENVIRONMENT}"
 
-        STORAGE_ACCOUNT = "devdevsecopsrep"
         ACR_NAME = "mydevopsacr123"
         REGISTRY = "${ACR_NAME}.azurecr.io"
         IMAGE_NAME = "${REGISTRY}/${APP_NAME}"
         AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
         AKS_CLUSTER_NAME = "microservices-aks"
+        STORAGE_ACCOUNT = "devdevsecopsrep"
 
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-        JUMP_SERVER_IP = credentials('JUMP_SERVER_IP')
         JUMP_USER      = "ganesh"
-
         NVD_API_KEY = credentials('NVD_API_KEY')
     }
 
@@ -39,14 +37,14 @@ pipeline {
             steps { script { prepareWorkspace() } }
         }
 
-    stage('Gitleaks Scan') {
-        when { expression { params.ENVIRONMENT == 'dev' } }
-        steps { script { runGitleaksScan() } }
-    }
-    stage('Dependency Check') {
-        when { expression { params.ENVIRONMENT == 'dev' } }
-        steps { script { runDependencyCheck() } }
-    }
+        stage('Gitleaks Scan') {
+            when { expression { params.ENVIRONMENT == 'dev' } }
+            steps { script { runGitleaksScan() } }
+        }
+        stage('Dependency Check') {
+            when { expression { params.ENVIRONMENT == 'dev' } }
+            steps { script { runDependencyCheck() } }
+        }
 
         stage('Security: Manifest Scan') {
             when { expression { params.ENVIRONMENT == 'dev' } }
@@ -66,7 +64,6 @@ pipeline {
             when { expression { params.ENVIRONMENT == 'dev' } }
             steps { script { runTrivyScan() } }
         }
-
 
         stage('Promote Image') {
             when { expression { params.ENVIRONMENT != 'dev' } }
@@ -102,13 +99,32 @@ def prepareWorkspace() {
     env.COMMIT_ID = sh(script: "git rev-parse HEAD", returnStdout: true).trim().take(8)
     env.DEPLOY_COMMIT = (params.PROMOTE_COMMIT_ID && params.PROMOTE_COMMIT_ID.trim() != '') ? params.PROMOTE_COMMIT_ID.trim().take(8) : env.COMMIT_ID
 
-    // New Tagging Format: service-env-hash
     env.IMAGE_TAG = "${env.IMAGE_NAME}:${env.APP_NAME}-${params.ENVIRONMENT}-${env.DEPLOY_COMMIT}"
 
     sh "rm -rf security-reports && mkdir -p security-reports"
-    echo "Environment: ${params.ENVIRONMENT} | Commit: ${env.DEPLOY_COMMIT} | Image: ${env.IMAGE_TAG}"
+
+    azLogin()
+    env.JUMP_SERVER_IP = fetchTerraformOutput("jump_server_ip")
+    echo "Environment: ${params.ENVIRONMENT} | Commit: ${env.DEPLOY_COMMIT} | Image: ${env.IMAGE_TAG} | Jump IP: ${env.JUMP_SERVER_IP}"
 }
 
+def azLogin() {
+    sh """
+        az login --service-principal -u ${env.AZURE_CLIENT_ID} -p ${env.AZURE_CLIENT_SECRET} --tenant ${env.AZURE_TENANT_ID}
+        az account set --subscription ${env.AZURE_SUBSCRIPTION_ID}
+    """
+}
+
+def fetchTerraformOutput(String outputName) {
+    dir("infra/terraform/env/core") {
+        sh """
+        terraform init \
+          -backend-config=${WORKSPACE}/backend/dev.conf \
+          -reconfigure > /dev/null 2>&1
+        """
+        return sh(script: "terraform output -raw ${outputName}", returnStdout: true).trim()
+    }
+}
 
 def runGitleaksScan() {
     sh "gitleaks detect --source . --config security/configs/gitleaks.toml --report-format json --report-path security-reports/gitleaks-${APP_NAME}.json || true"
@@ -140,9 +156,7 @@ def dockerPullTagPush() {
     def sourceEnvMap = ['qa': 'dev', 'uat': 'qa', 'prod': 'uat']
     def sourceEnv = sourceEnvMap[params.ENVIRONMENT]
     
-    // Pull from the source environment's tag
     def sourceTag = "${env.IMAGE_NAME}:${env.APP_NAME}-${sourceEnv}-${env.DEPLOY_COMMIT}"
-    // Target tag for the current environment
     def targetTag = "${env.IMAGE_TAG}"
 
     echo "Promoting ${sourceTag} → ${targetTag}"
@@ -169,16 +183,15 @@ def deployToAKS() {
         withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
             sh """
                 set -e
-                # Perform variable substitution locally on the Jenkins agent
                 for f in ${K8S_DIR}/*.yaml; do
                     envsubst '\$IMAGE_TAG,\$HOSTNAME,\$NAMESPACE' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
                 done
 
-                ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${JUMP_SERVER_IP}" || true
-                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
-                scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
+                ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
+                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
+                scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/
 
-                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
+                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "
                     set -e
                     kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                     kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
@@ -193,11 +206,8 @@ def deployToAKS() {
 
 def uploadSecurityReports() {
     sh """
-        # Clear Azure CLI cache to avoid AttributeError issues
         rm -rf ~/.azure/msal_http_cache.bin || true
-
         ACCOUNT_KEY=\$(az storage account keys list --account-name ${env.STORAGE_ACCOUNT} --query "[0].value" -o tsv)
-
         az storage blob upload-batch \\
           --account-name ${env.STORAGE_ACCOUNT} \\
           --account-key \$ACCOUNT_KEY \\

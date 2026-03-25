@@ -119,6 +119,11 @@ variable "cost_center" {
   default = "CC1001"
 }
 
+variable "reports_storage_account_name" {
+  type        = string
+  description = "Name of the persistent security reports storage account"
+}
+
 ############################################
 # Jump Server Configuration
 ############################################

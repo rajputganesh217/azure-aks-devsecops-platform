@@ -1,0 +1,20 @@
+image:
+  repository: postgres
+  tag: "15.5"
+
+storage:
+  size: 5Gi
+
+resources:
+  limits:
+    cpu: "200m"
+    memory: "256Mi"
+  requests:
+    cpu: "50m"
+    memory: "128Mi"
+
+# These are populated during deployment
+csi:
+  tenantId: ""
+  clientId: ""
+  keyvaultName: ""

@@ -9,6 +9,7 @@ node_count = 1
 vm_size    = "Standard_D2s_v3"
 
 acr_name = "mydevopsacr123"
+reports_storage_account_name = "devdevsecopsrep"
 
 environment        = "dev"
 vnet_address_space = ["10.1.0.0/16"]

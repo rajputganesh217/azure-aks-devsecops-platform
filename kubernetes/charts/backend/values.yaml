@@ -1,0 +1,28 @@
+replicaCount: 1
+image:
+  repository: mydevopsacr123.azurecr.io/backend
+  tag: "latest"
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 5000
+
+ingress:
+  enabled: true
+  host: "api-dev.microservices.local"
+  tlsSecretName: microservices-tls-secret
+
+resources:
+  limits:
+    cpu: "100m"
+    memory: "128Mi"
+  requests:
+    cpu: "10m"
+    memory: "64Mi"
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPU: 70

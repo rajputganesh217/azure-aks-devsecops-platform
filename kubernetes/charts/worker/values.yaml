@@ -1,0 +1,19 @@
+replicaCount: 1
+image:
+  repository: mydevopsacr123.azurecr.io/worker
+  tag: "latest"
+  pullPolicy: Always
+
+resources:
+  limits:
+    cpu: "100m"
+    memory: "128Mi"
+  requests:
+    cpu: "10m"
+    memory: "64Mi"
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPU: 70

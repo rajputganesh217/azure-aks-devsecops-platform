@@ -16,11 +16,29 @@ module "tags" {
 }
 
 ############################################
-# Resource Group (Pre-created for State)
+# Resource Group (Managed by Persistent Layer)
 ############################################
 
 data "azurerm_resource_group" "rg" {
   name = var.resource_group_name
+}
+
+############################################
+# Shared ACR (Managed by Persistent Layer)
+############################################
+
+data "azurerm_container_registry" "acr" {
+  name                = var.acr_name
+  resource_group_name = data.azurerm_resource_group.rg.name
+}
+
+############################################
+# Security Reports Storage (Managed by Persistent Layer)
+############################################
+
+data "azurerm_storage_account" "reports" {
+  name                = var.reports_storage_account_name
+  resource_group_name = data.azurerm_resource_group.rg.name
 }
 
 ############################################
@@ -51,19 +69,6 @@ module "vnet" {
   app_subnets        = var.app_subnets
   db_subnets         = var.db_subnets
   tags               = module.tags.tags
-}
-
-############################################
-# Azure Container Registry
-############################################
-
-module "acr" {
-  source = "../../modules/acr"
-
-  acr_name            = var.acr_name
-  location            = var.location
-  resource_group_name = data.azurerm_resource_group.rg.name
-  tags                = module.tags.tags
 }
 
 ############################################
@@ -127,19 +132,6 @@ module "keyvault" {
 }
 
 ############################################
-# Storage Account for Security Reports
-############################################
-
-module "storage_account" {
-  source = "../../modules/storage-account"
-
-  storage_account_name = "${var.environment}devsecopsrep"
-  location             = var.location
-  resource_group_name  = data.azurerm_resource_group.rg.name
-  tags                 = module.tags.tags
-}
-
-############################################
 # Jump Server
 ############################################
 
@@ -185,7 +177,6 @@ resource "azurerm_role_assignment" "agic_rg_reader" {
   principal_id         = module.aks.agic_identity_id
 }
 
-
 # Jump Server → AKS: Cluster Admin
 resource "azurerm_role_assignment" "jump_aks_admin" {
   scope                = module.aks.cluster_id
@@ -205,18 +196,11 @@ resource "azurerm_role_assignment" "jump_aks_rbac_admin" {
   principal_id         = module.jump_server.identity_principal_id
 }
 
-# Jump Server → ACR: AcrPull
+# Jump Server → ACR: AcrPull (Shared ACR)
 resource "azurerm_role_assignment" "jump_acr_pull" {
-  scope                = module.acr.acr_id
+  scope                = data.azurerm_container_registry.acr.id
   role_definition_name = "AcrPull"
   principal_id         = module.jump_server.identity_principal_id
-}
-
-# Jenkins SP → ACR: AcrPush
-resource "azurerm_role_assignment" "jenkins_acr_push" {
-  scope                = module.acr.acr_id
-  role_definition_name = "AcrPush"
-  principal_id         = data.azurerm_client_config.current.object_id
 }
 
 # Jump Server → Resource Group: Reader
@@ -226,7 +210,6 @@ resource "azurerm_role_assignment" "jump_rg_reader" {
   principal_id         = module.jump_server.identity_principal_id
 }
 
-
 # Key Vault Secrets User: AKS CSI → KV
 resource "azurerm_role_assignment" "aks_kv_secrets" {
   scope                = module.keyvault.keyvault_id
@@ -234,9 +217,9 @@ resource "azurerm_role_assignment" "aks_kv_secrets" {
   principal_id         = module.aks.key_vault_secrets_provider_identity_object_id
 }
 
-# AKS Node → ACR: AcrPull
+# AKS Node → ACR: AcrPull (Shared ACR)
 resource "azurerm_role_assignment" "aks_acr_pull" {
   principal_id         = module.aks.kubelet_identity
   role_definition_name = "AcrPull"
-  scope                = module.acr.acr_id
+  scope                = data.azurerm_container_registry.acr.id
 }

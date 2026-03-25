@@ -10,14 +10,16 @@ pipeline {
         K8S_DIR = "kubernetes/postgres"
         NAMESPACE = "${params.ENVIRONMENT}"
 
+        ACR_NAME = "mydevopsacr123"
+        AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
+        AKS_CLUSTER_NAME = "microservices-aks"
+        STORAGE_ACCOUNT = "devdevsecopsrep"
+
         AZURE_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
-
-
-        JUMP_SERVER_IP = credentials('JUMP_SERVER_IP')
         JUMP_USER      = "ganesh"
 
         POSTGRES_USER      = credentials('POSTGRES_USER')
@@ -29,15 +31,16 @@ pipeline {
         stage('Prepare') {
             steps {
                 script {
-                    env.AKS_RESOURCE_GROUP = "aks-microservices-dev-rg"
-                    env.AKS_CLUSTER_NAME   = "microservices-aks"
-                    env.STORAGE_ACCOUNT    = "devdevsecopsrep"
                     env.COMMIT_ID = sh(script: "git rev-parse --short=8 HEAD", returnStdout: true).trim()
                     sh "rm -rf security-reports && mkdir -p security-reports"
+
+                    // Auto-fetch Jump Server IP from Terraform output
+                    azLogin()
+                    env.JUMP_SERVER_IP = fetchTerraformOutput("jump_server_ip")
+                    echo "Jump Server IP: ${env.JUMP_SERVER_IP}"
                 }
             }
         }
-
 
         stage('Security: Manifest Scan') {
             when { expression { params.ENVIRONMENT == 'dev' } }
@@ -48,7 +51,6 @@ pipeline {
             }
         }
 
-
         stage('Create Secret') {
             steps { script { createSecret() } }
         }
@@ -57,7 +59,6 @@ pipeline {
             when { expression { params.ENVIRONMENT == 'dev' } }
             steps { script { scanPostgres() } }
         }
-
 
         stage('Deploy PostgreSQL') {
             steps { script { deployPostgres() } }
@@ -78,39 +79,56 @@ pipeline {
     }
 }
 
+// ──────────────────────────────────────────────
+// FUNCTIONS
+// ──────────────────────────────────────────────
+
+def azLogin() {
+    sh """
+        az login --service-principal -u ${env.AZURE_CLIENT_ID} -p ${env.AZURE_CLIENT_SECRET} --tenant ${env.AZURE_TENANT_ID}
+        az account set --subscription ${env.AZURE_SUBSCRIPTION_ID}
+    """
+}
+
+def fetchTerraformOutput(String outputName) {
+    dir("infra/terraform/env/core") {
+        sh """
+        terraform init \
+          -backend-config=${WORKSPACE}/backend/dev.conf \
+          -reconfigure > /dev/null 2>&1
+        """
+        return sh(script: "terraform output -raw ${outputName}", returnStdout: true).trim()
+    }
+}
 
 def createSecret() {
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
         sh """
             set -e
-            ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${JUMP_SERVER_IP}" || true
-            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/openssl.cnf ${JUMP_USER}@${JUMP_SERVER_IP}:/tmp/openssl-san.cnf
+            ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
+            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/openssl.cnf ${JUMP_USER}@${env.JUMP_SERVER_IP}:/tmp/openssl-san.cnf
 
-            ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
+            ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "
                 set -e
                 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                 
-                # Let Secrets Store CSI driver manage postgres-secret from Key Vault.
-                # Only creating TLS secret manually if required.
-                
-                # Create TLS secret (self-signed wildcard cert) for HTTPS
-                if [ \"${params.GENERATE_SECRET}\" = \"true\" ] || ! kubectl get secret microservices-tls-secret -n ${NAMESPACE} > /dev/null 2>&1; then
-                    echo \"Creating/Updating TLS secret in namespace ${NAMESPACE}...\"
+                if [ \\"${params.GENERATE_SECRET}\\" = \\"true\\" ] || ! kubectl get secret microservices-tls-secret -n ${NAMESPACE} > /dev/null 2>&1; then
+                    echo \\"Creating/Updating TLS secret in namespace ${NAMESPACE}...\\"
                     
                     kubectl delete secret microservices-tls-secret -n ${NAMESPACE} --ignore-not-found
                     
-                    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \\
-                      -keyout /tmp/tls.key \\
-                      -out /tmp/tls.crt \\
+                    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \\\\
+                      -keyout /tmp/tls.key \\\\
+                      -out /tmp/tls.crt \\\\
                       -config /tmp/openssl-san.cnf
                     
-                    kubectl create secret tls microservices-tls-secret -n ${NAMESPACE} \\
+                    kubectl create secret tls microservices-tls-secret -n ${NAMESPACE} \\\\
                       --cert=/tmp/tls.crt --key=/tmp/tls.key
                     
-                    echo \"TLS secret microservices-tls-secret created successfully.\"
+                    echo \\"TLS secret microservices-tls-secret created successfully.\\"
                     rm -f /tmp/tls.key /tmp/tls.crt /tmp/openssl-san.cnf
                 else
-                    echo \"TLS secret microservices-tls-secret already exists. Skipping creation.\"
+                    echo \\"TLS secret microservices-tls-secret already exists. Skipping creation.\\"
                 fi
             "
         """
@@ -135,9 +153,6 @@ def deployPostgres() {
         sh """
             set -e
             
-            az login --service-principal -u ${env.AZURE_CLIENT_ID} -p ${env.AZURE_CLIENT_SECRET} --tenant ${env.AZURE_TENANT_ID}
-            az account set --subscription ${env.AZURE_SUBSCRIPTION_ID}
-            
             export KEYVAULT_NAME="${params.ENVIRONMENT}-devsecops-kv"
 
             echo "Ensuring Key Vault \${KEYVAULT_NAME} exists..."
@@ -150,7 +165,6 @@ def deployPostgres() {
             
             KV_SCOPE=\$(az keyvault show -n \${KEYVAULT_NAME} --query "id" -o tsv)
 
-            # Fetch CSI Identity Client ID dynamically
             CSI_IDENTITY_CLIENT_ID=\$(az aks show -g ${env.AKS_RESOURCE_GROUP} -n ${env.AKS_CLUSTER_NAME} --query "addonProfiles.azureKeyvaultSecretsProvider.identity.clientId" -o tsv)
             export CSI_IDENTITY_CLIENT_ID
             echo "Fetched CSI_IDENTITY_CLIENT_ID: \$CSI_IDENTITY_CLIENT_ID"
@@ -180,16 +194,15 @@ def deployPostgres() {
                 fi
             done
             
-            # Perform variable substitution locally on the Jenkins agent
             for f in ${K8S_DIR}/*.yaml kubernetes/network-policies.yaml; do
                 envsubst '\$AZURE_TENANT_ID,\$CSI_IDENTITY_CLIENT_ID,\$NAMESPACE,\$KEYVAULT_NAME' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
             done
 
-            ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${JUMP_SERVER_IP}" || true
-            ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
-            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/*.yaml kubernetes/network-policies.yaml ${JUMP_USER}@${JUMP_SERVER_IP}:${remoteDir}/
+            ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
+            ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
+            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/*.yaml kubernetes/network-policies.yaml ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/
 
-            ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${JUMP_SERVER_IP} "
+            ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "
                 set -e
                 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                 kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
@@ -202,13 +215,9 @@ def deployPostgres() {
 
 def uploadReports() {
     sh """
-    # Clear Azure CLI cache to avoid AttributeError issues
     rm -rf ~/.azure/msal_http_cache.bin || true
-
     az account set --subscription ${env.AZURE_SUBSCRIPTION_ID}
-
     ACCOUNT_KEY=\$(az storage account keys list --account-name ${env.STORAGE_ACCOUNT} --query "[0].value" -o tsv)
-
     az storage blob upload-batch \\
       --account-name ${env.STORAGE_ACCOUNT} \\
       --account-key \$ACCOUNT_KEY \\
