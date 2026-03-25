@@ -1,5 +1,5 @@
 output "resource_group_name" {
-  value = azurerm_resource_group.persistent.name
+  value = data.azurerm_resource_group.persistent.name
 }
 
 output "acr_name" {
@@ -15,7 +15,7 @@ output "acr_id" {
 }
 
 output "tfstate_storage_account_name" {
-  value = azurerm_storage_account.tfstate.name
+  value = data.azurerm_storage_account.tfstate.name
 }
 
 output "reports_storage_account_name" {
