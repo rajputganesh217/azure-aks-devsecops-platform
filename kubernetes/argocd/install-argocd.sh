@@ -1,42 +1,141 @@
 #!/bin/bash
-# Argo-CD Automated Installation Script
-# Run on the Jump Server after AKS is ready
-# This installs Argo-CD, exposes it via App Gateway Ingress, and deploys all applications
+# ============================================================
+# Argo-CD Fully Automated Installation Script
+# ============================================================
+# This script is called by the database Jenkins pipeline on
+# the Jump Server AFTER the first namespace (dev) is deployed.
+# It is idempotent — safe to run multiple times.
+# ============================================================
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+NAMESPACE_SOURCE="${1:-dev}"   # Namespace to copy TLS secret from
 
-echo "=== Creating argocd namespace ==="
+echo "=== Step 1: Creating argocd namespace ==="
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 
-echo "=== Installing Argo-CD ==="
+echo "=== Step 2: Installing Argo-CD ==="
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
-echo "=== Waiting for Argo-CD to be ready ==="
+echo "=== Step 3: Waiting for Argo-CD server to be ready ==="
 kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
 
-echo "=== Exposing Argo-CD via App Gateway Ingress ==="
-kubectl apply -f "$SCRIPT_DIR/argocd-ingress.yaml"
+echo "=== Step 4: Patching Argo-CD to run in insecure mode (HTTP backend) ==="
+# Check if already patched
+CURRENT_ARGS=$(kubectl get deployment argocd-server -n argocd -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null || echo "")
+if echo "$CURRENT_ARGS" | grep -q "insecure"; then
+    echo "Already patched to insecure mode. Skipping."
+else
+    kubectl patch deployment argocd-server -n argocd --type='json' -p='[
+      {"op": "add", "path": "/spec/template/spec/containers/0/command", "value": ["argocd-server"]},
+      {"op": "add", "path": "/spec/template/spec/containers/0/args", "value": ["--insecure"]}
+    ]'
+    kubectl rollout status deployment/argocd-server -n argocd --timeout=120s
+fi
 
-echo "=== Deploying ArgoCD Applications (dev + qa) ==="
-kubectl apply -f "$SCRIPT_DIR/applications.yaml"
+echo "=== Step 5: Copying TLS secret from ${NAMESPACE_SOURCE} to argocd namespace ==="
+if kubectl get secret microservices-tls-secret -n "$NAMESPACE_SOURCE" > /dev/null 2>&1; then
+    kubectl get secret microservices-tls-secret -n "$NAMESPACE_SOURCE" -o json | \
+      jq '.metadata.namespace = "argocd" | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp)' | \
+      kubectl apply -f -
+    echo "TLS secret copied successfully."
+else
+    echo "WARNING: TLS secret not found in ${NAMESPACE_SOURCE}. ArgoCD Ingress may not work over HTTPS."
+fi
+
+echo "=== Step 6: Applying ArgoCD Ingress (App Gateway with TLS) ==="
+cat <<'INGRESS_EOF' | kubectl apply -f -
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server-ingress
+  namespace: argocd
+  annotations:
+    appgw.ingress.kubernetes.io/backend-protocol: "http"
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+    appgw.ingress.kubernetes.io/health-probe-path: "/healthz"
+    appgw.ingress.kubernetes.io/cookie-based-affinity: "true"
+spec:
+  ingressClassName: azure-application-gateway
+  tls:
+  - hosts:
+    - argocd.microservices.local
+    secretName: microservices-tls-secret
+  rules:
+    - host: argocd.microservices.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
+INGRESS_EOF
+
+echo "=== Step 7: Applying ArgoCD Application manifests (monitoring-only) ==="
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/applications.yaml" ]; then
+    kubectl apply -f "$SCRIPT_DIR/applications.yaml"
+else
+    # Fallback: apply inline
+    cat <<'APPS_EOF' | kubectl apply -f -
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/rajputganesh217/azure-aks-devsecops-platform.git"
+    targetRevision: main
+    path: kubernetes/charts/platform
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: dev
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-qa
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/rajputganesh217/azure-aks-devsecops-platform.git"
+    targetRevision: main
+    path: kubernetes/charts/platform
+    helm:
+      parameters:
+        - name: backend.ingress.host
+          value: "api-qa.microservices.local"
+        - name: frontend.ingress.host
+          value: "qa.microservices.local"
+        - name: postgres.csi.keyvaultName
+          value: "qa-devsecops-kv"
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: qa
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+APPS_EOF
+fi
 
 echo ""
 echo "============================================"
-echo "  Argo-CD is installed and fully configured!"
+echo "  Argo-CD Setup Complete!"
 echo "============================================"
-
-ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
-echo ""
+ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d 2>/dev/null || echo "N/A")
 echo "  Admin User:     admin"
 echo "  Admin Password: ${ARGOCD_PASSWORD}"
-echo ""
 echo "  Dashboard URL:  https://argocd.microservices.local"
-echo "  (Add this to your hosts file with App Gateway IP)"
-echo ""
-echo "  Applications deployed:"
-echo "    - platform-dev (namespace: dev)"
-echo "    - platform-qa  (namespace: qa)"
 echo "============================================"
