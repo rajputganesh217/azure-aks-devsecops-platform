@@ -20,6 +20,12 @@ pipeline {
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID       = credentials('AZURE_TENANT_ID')
 
+        // Terraform needs ARM_* env vars
+        ARM_CLIENT_ID       = credentials('AZURE_CLIENT_ID')
+        ARM_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
+        ARM_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
+        ARM_TENANT_ID       = credentials('AZURE_TENANT_ID')
+
         JUMP_USER      = "ganesh"
 
         POSTGRES_USER      = credentials('POSTGRES_USER')

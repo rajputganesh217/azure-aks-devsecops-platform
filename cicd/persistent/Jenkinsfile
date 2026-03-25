@@ -19,6 +19,11 @@ pipeline {
         ARM_CLIENT_SECRET   = credentials('AZURE_CLIENT_SECRET')
         ARM_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         ARM_TENANT_ID       = credentials('AZURE_TENANT_ID')
+
+        // Persistent layer names — must match persistent/variables.tf defaults
+        PERSISTENT_RG       = "aks-microservices-dev-rg"
+        STATE_STORAGE_NAME  = "tfstatedevsecops01"
+        STATE_CONTAINER     = "terraform-state"
     }
 
     stages {
@@ -33,8 +38,8 @@ pipeline {
                 stage('Gitleaks') {
                     steps {
                         sh """
-                        gitleaks detect --source . \
-                          --report-format json \
+                        gitleaks detect --source . \\
+                          --report-format json \\
                           --report-path security-reports/gitleaks-persistent.json || true
                         """
                     }
@@ -43,11 +48,11 @@ pipeline {
                     steps {
                         sh """
                         if command -v checkov > /dev/null; then
-                            checkov -d ${TF_DIR} --framework terraform --quiet \
+                            checkov -d ${TF_DIR} --framework terraform --quiet \\
                               -o json > security-reports/checkov-persistent.json || true
                         else
-                            docker run --rm -v \$(pwd):/tf bridgecrew/checkov \
-                              -d /tf/${TF_DIR} --framework terraform --quiet \
+                            docker run --rm -v \$(pwd):/tf bridgecrew/checkov \\
+                              -d /tf/${TF_DIR} --framework terraform --quiet \\
                               -o json > security-reports/checkov-persistent.json || true
                         fi
                         """
@@ -56,12 +61,21 @@ pipeline {
             }
         }
 
+        stage('Bootstrap Backend Storage') {
+            steps {
+                script { bootstrapBackendStorage() }
+            }
+        }
+
         stage('Terraform Init') {
             steps {
                 dir("${TF_DIR}") {
                     sh """
-                    terraform init \
-                      -backend-config=${WORKSPACE}/backend/persistent.conf \
+                    terraform init \\
+                      -backend-config=resource_group_name=${PERSISTENT_RG} \\
+                      -backend-config=storage_account_name=${STATE_STORAGE_NAME} \\
+                      -backend-config=container_name=${STATE_CONTAINER} \\
+                      -backend-config=key=persistent.terraform.tfstate \\
                       -reconfigure
                     """
                 }
@@ -111,4 +125,65 @@ pipeline {
         success { echo "Persistent infrastructure pipeline completed successfully" }
         failure { echo "Persistent infrastructure pipeline failed" }
     }
+}
+
+// ──────────────────────────────────────────────
+// Bootstrap: Create RG + Storage BEFORE terraform init
+// This solves the chicken-and-egg problem.
+// ──────────────────────────────────────────────
+def bootstrapBackendStorage() {
+    sh """
+    set -e
+    echo "=== Bootstrapping Backend Storage ==="
+
+    # Login to Azure
+    az login --service-principal \\
+      -u \$ARM_CLIENT_ID \\
+      -p \$ARM_CLIENT_SECRET \\
+      --tenant \$ARM_TENANT_ID
+    az account set --subscription \$ARM_SUBSCRIPTION_ID
+
+    # 1. Create Resource Group if it doesn't exist
+    RG_EXISTS=\$(az group exists --name ${PERSISTENT_RG})
+    if [ "\$RG_EXISTS" = "false" ]; then
+        echo "Creating Resource Group: ${PERSISTENT_RG}"
+        az group create --name ${PERSISTENT_RG} --location eastus
+    else
+        echo "Resource Group ${PERSISTENT_RG} already exists"
+    fi
+
+    # 2. Create Storage Account if it doesn't exist
+    SA_EXISTS=\$(az storage account check-name --name ${STATE_STORAGE_NAME} --query "nameAvailable" -o tsv)
+    if [ "\$SA_EXISTS" = "true" ]; then
+        echo "Creating Storage Account: ${STATE_STORAGE_NAME}"
+        az storage account create \\
+          --name ${STATE_STORAGE_NAME} \\
+          --resource-group ${PERSISTENT_RG} \\
+          --location eastus \\
+          --sku Standard_LRS \\
+          --allow-blob-public-access false
+    else
+        echo "Storage Account ${STATE_STORAGE_NAME} already exists"
+    fi
+
+    # 3. Create Blob Container if it doesn't exist
+    ACCOUNT_KEY=\$(az storage account keys list --account-name ${STATE_STORAGE_NAME} --resource-group ${PERSISTENT_RG} --query "[0].value" -o tsv)
+    CONTAINER_EXISTS=\$(az storage container exists \\
+      --name ${STATE_CONTAINER} \\
+      --account-name ${STATE_STORAGE_NAME} \\
+      --account-key \$ACCOUNT_KEY \\
+      --query "exists" -o tsv)
+
+    if [ "\$CONTAINER_EXISTS" = "false" ]; then
+        echo "Creating Blob Container: ${STATE_CONTAINER}"
+        az storage container create \\
+          --name ${STATE_CONTAINER} \\
+          --account-name ${STATE_STORAGE_NAME} \\
+          --account-key \$ACCOUNT_KEY
+    else
+        echo "Blob Container ${STATE_CONTAINER} already exists"
+    fi
+
+    echo "=== Bootstrap Complete ==="
+    """
 }
