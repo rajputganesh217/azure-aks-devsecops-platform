@@ -16,9 +16,6 @@ spec:
     server: "https://kubernetes.default.svc"
     namespace: dev
   syncPolicy:
-    automated:
-      prune: false
-      selfHeal: false
     syncOptions:
       - CreateNamespace=true
 ---
@@ -35,12 +32,6 @@ spec:
     path: kubernetes/charts/platform
     helm:
       parameters:
-        - name: backend.image.tag
-          value: "latest"
-        - name: frontend.image.tag
-          value: "latest"
-        - name: worker.image.tag
-          value: "latest"
         - name: backend.ingress.host
           value: "api-qa.microservices.local"
         - name: frontend.ingress.host
@@ -51,8 +42,5 @@ spec:
     server: "https://kubernetes.default.svc"
     namespace: qa
   syncPolicy:
-    automated:
-      prune: false
-      selfHeal: false
     syncOptions:
       - CreateNamespace=true
