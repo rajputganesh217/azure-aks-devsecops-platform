@@ -17,17 +17,11 @@ provider "azurerm" {
 data "azurerm_client_config" "current" {}
 
 ############################################
-# Resource Group
+# Resource Group (Bootstrapped by CLI)
 ############################################
 
-resource "azurerm_resource_group" "persistent" {
-  name     = var.resource_group_name
-  location = var.location
-  tags = {
-    Project     = "DevSecOps-Platform"
-    Environment = "persistent"
-    ManagedBy   = "Terraform"
-  }
+data "azurerm_resource_group" "persistent" {
+  name = var.resource_group_name
 }
 
 ############################################
@@ -36,8 +30,8 @@ resource "azurerm_resource_group" "persistent" {
 
 resource "azurerm_container_registry" "acr" {
   name                = var.acr_name
-  resource_group_name = azurerm_resource_group.persistent.name
-  location            = azurerm_resource_group.persistent.location
+  resource_group_name = data.azurerm_resource_group.persistent.name
+  location            = data.azurerm_resource_group.persistent.location
   sku                 = "Standard"
   admin_enabled       = false
   tags = {
@@ -54,27 +48,17 @@ resource "azurerm_role_assignment" "jenkins_acr_push" {
 }
 
 ############################################
-# Terraform State Storage Account
+# Terraform State Storage (Bootstrapped)
 ############################################
 
-resource "azurerm_storage_account" "tfstate" {
-  name                            = var.tfstate_storage_account_name
-  resource_group_name             = azurerm_resource_group.persistent.name
-  location                        = azurerm_resource_group.persistent.location
-  account_tier                    = "Standard"
-  account_replication_type        = "LRS"
-  allow_nested_items_to_be_public = false
-  tags = {
-    Project   = "DevSecOps-Platform"
-    Purpose   = "Terraform-State"
-    ManagedBy = "Terraform"
-  }
+data "azurerm_storage_account" "tfstate" {
+  name                = var.tfstate_storage_account_name
+  resource_group_name = data.azurerm_resource_group.persistent.name
 }
 
-resource "azurerm_storage_container" "tfstate" {
-  name                  = "terraform-state"
-  storage_account_name  = azurerm_storage_account.tfstate.name
-  container_access_type = "private"
+data "azurerm_storage_container" "tfstate" {
+  name                 = "terraform-state"
+  storage_account_name = data.azurerm_storage_account.tfstate.name
 }
 
 ############################################
@@ -83,8 +67,8 @@ resource "azurerm_storage_container" "tfstate" {
 
 resource "azurerm_storage_account" "reports" {
   name                            = var.reports_storage_account_name
-  resource_group_name             = azurerm_resource_group.persistent.name
-  location                        = azurerm_resource_group.persistent.location
+  resource_group_name             = data.azurerm_resource_group.persistent.name
+  location                        = data.azurerm_resource_group.persistent.location
   account_tier                    = "Standard"
   account_replication_type        = "LRS"
   allow_nested_items_to_be_public = false
@@ -107,8 +91,8 @@ resource "azurerm_storage_container" "reports" {
 
 resource "azurerm_public_ip" "appgw_pip" {
   name                = "${var.environment}-appgw-pip"
-  resource_group_name = azurerm_resource_group.persistent.name
-  location            = azurerm_resource_group.persistent.location
+  resource_group_name = data.azurerm_resource_group.persistent.name
+  location            = data.azurerm_resource_group.persistent.location
   allocation_method   = "Static"
   sku                 = "Standard"
   tags = {
@@ -120,8 +104,8 @@ resource "azurerm_public_ip" "appgw_pip" {
 
 resource "azurerm_public_ip" "jump_server_pip" {
   name                = "devops-jump-server-pip"
-  resource_group_name = azurerm_resource_group.persistent.name
-  location            = azurerm_resource_group.persistent.location
+  resource_group_name = data.azurerm_resource_group.persistent.name
+  location            = data.azurerm_resource_group.persistent.location
   allocation_method   = "Static"
   sku                 = "Standard"
   tags = {
