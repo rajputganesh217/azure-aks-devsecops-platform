@@ -19,10 +19,22 @@ spec:
           value: "${AZURE_TENANT_ID}"
         - name: backend.image.tag
           value: "backend-dev-latest"
+        - name: backend.keyvaultName
+          value: "${KEYVAULT_NAME}"
+        - name: backend.csi.clientId
+          value: "${CSI_IDENTITY_CLIENT_ID}"
+        - name: backend.csi.tenantId
+          value: "${AZURE_TENANT_ID}"
         - name: frontend.image.tag
           value: "frontend-dev-latest"
         - name: worker.image.tag
           value: "worker-dev-latest"
+        - name: worker.keyvaultName
+          value: "${KEYVAULT_NAME}"
+        - name: worker.csi.clientId
+          value: "${CSI_IDENTITY_CLIENT_ID}"
+        - name: worker.csi.tenantId
+          value: "${AZURE_TENANT_ID}"
   destination:
     server: "https://kubernetes.default.svc"
     namespace: dev

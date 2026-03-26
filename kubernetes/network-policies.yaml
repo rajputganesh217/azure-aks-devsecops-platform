@@ -159,3 +159,55 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-azure-services
+  namespace: ${NAMESPACE}
+# This policy allows pods to talk to Azure Instance Metadata Service (IMDS)
+# and Key Vault endpoints which are required for Managed Identity & CSI
+spec:
+  podSelector:
+    matchLabels:
+      app: worker # Also apply to backend if needed
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.254/32 # Azure IMDS
+      ports:
+        - protocol: TCP
+          port: 80
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0 # Allow HTTPS to Azure Public Endpoints (Key Vault)
+      ports:
+        - protocol: TCP
+          port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-egress-to-azure
+  namespace: ${NAMESPACE}
+spec:
+  podSelector:
+    matchLabels:
+      app: shoe-backend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.254/32 # Azure IMDS
+      ports:
+        - protocol: TCP
+          port: 80
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0 
+      ports:
+        - protocol: TCP
+          port: 443
