@@ -149,9 +149,12 @@ def runDependencyCheck() {
 def dockerBuildPush() {
     sh "docker build -t ${env.IMAGE_TAG} -f docker/${APP_NAME}/Dockerfile ."
     azAcrLogin()
+    def LATEST_TAG = "${env.IMAGE_NAME}:${env.APP_NAME}-${params.ENVIRONMENT}-latest"
+    sh "docker tag ${env.IMAGE_TAG} ${LATEST_TAG}"
     sh "docker push ${env.IMAGE_TAG}"
-    sh "docker image rm ${env.IMAGE_TAG} || true"
-    echo "Image pushed: ${env.IMAGE_TAG}"
+    sh "docker push ${LATEST_TAG}"
+    sh "docker image rm ${env.IMAGE_TAG} ${LATEST_TAG} || true"
+    echo "Image pushed: ${env.IMAGE_TAG} and ${LATEST_TAG}"
 }
 
 def runTrivyScan() {
@@ -164,14 +167,17 @@ def dockerPullTagPush() {
     
     def sourceTag = "${env.IMAGE_NAME}:${env.APP_NAME}-${sourceEnv}-${env.DEPLOY_COMMIT}"
     def targetTag = "${env.IMAGE_TAG}"
+    def latestTag = "${env.IMAGE_NAME}:${env.APP_NAME}-${params.ENVIRONMENT}-latest"
 
-    echo "Promoting ${sourceTag} → ${targetTag}"
+    echo "Promoting ${sourceTag} → ${targetTag} and ${latestTag}"
 
     azAcrLogin()
     sh "docker pull ${sourceTag}"
     sh "docker tag ${sourceTag} ${targetTag}"
+    sh "docker tag ${sourceTag} ${latestTag}"
     sh "docker push ${targetTag}"
-    sh "docker image rm ${sourceTag} ${targetTag} || true"
+    sh "docker push ${latestTag}"
+    sh "docker image rm ${sourceTag} ${targetTag} ${latestTag} || true"
 }
 
 def azAcrLogin() {
@@ -182,32 +188,18 @@ def azAcrLogin() {
 }
 
 def deployToAKS() {
-    def remoteDir = "/tmp/k8s-${APP_NAME}-${env.BUILD_NUMBER}"
-    def dnsHost = "${NAMESPACE}.microservices.local"
-
-    withEnv(["HOSTNAME=${dnsHost}"]) {
-        withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
-            sh """
+    withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
+        sh """
+            set -e
+            ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
+            ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "
                 set -e
-                for f in ${K8S_DIR}/*.yaml; do
-                    envsubst '\$IMAGE_TAG,\$HOSTNAME,\$NAMESPACE' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
-                done
-
-                ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
-                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
-                scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/*.yaml ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/
-
-                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "
-                    set -e
-                    kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                    kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
-                    kubectl rollout status deployment/shoe-frontend -n ${NAMESPACE} --timeout=300s
-                    rm -rf ${remoteDir}
-                "
-            """
-        }
+                kubectl rollout restart deployment/shoe-frontend -n ${NAMESPACE}
+                kubectl rollout status deployment/shoe-frontend -n ${NAMESPACE} --timeout=300s
+            "
+        """
     }
-    echo "Deployed ${APP_NAME} to ${params.ENVIRONMENT} namespace"
+    echo "Triggered restart for ${APP_NAME} in ${params.ENVIRONMENT} namespace (ArgoCD manages the deployment spec)"
 }
 
 def uploadSecurityReports() {

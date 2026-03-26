@@ -160,64 +160,66 @@ def scanPostgres() {
 def deployPostgres() {
     def remoteDir = "/tmp/k8s-postgres-${env.BUILD_NUMBER}"
 
+    sh """
+        set -e
+        export KEYVAULT_NAME="${params.ENVIRONMENT}-devsecops-kv"
+
+        echo "Ensuring Key Vault \${KEYVAULT_NAME} exists..."
+        KV_EXISTS=\$(az keyvault list -g ${env.AKS_RESOURCE_GROUP} --query "[?name=='\${KEYVAULT_NAME}'].name" -o tsv)
+        if [ -z "\$KV_EXISTS" ]; then
+            echo "Creating Key Vault \${KEYVAULT_NAME}..."
+            az keyvault create --name \${KEYVAULT_NAME} -g ${env.AKS_RESOURCE_GROUP} --location eastus --enable-rbac-authorization true
+            sleep 15
+        fi
+        
+        KV_SCOPE=\$(az keyvault show -n \${KEYVAULT_NAME} --query "id" -o tsv)
+
+        CSI_IDENTITY_CLIENT_ID=\$(az aks show -g ${env.AKS_RESOURCE_GROUP} -n ${env.AKS_CLUSTER_NAME} --query "addonProfiles.azureKeyvaultSecretsProvider.identity.clientId" -o tsv)
+        echo "\$CSI_IDENTITY_CLIENT_ID" > csi_client_id.txt
+
+        CSI_IDENTITY_OBJECT_ID=\$(az aks show -g ${env.AKS_RESOURCE_GROUP} -n ${env.AKS_CLUSTER_NAME} --query "addonProfiles.azureKeyvaultSecretsProvider.identity.objectId" -o tsv)
+
+        echo "Assigning Roles..."
+        az role assignment create --role "Key Vault Administrator" --assignee "${env.AZURE_CLIENT_ID}" --scope "\$KV_SCOPE" || true
+        az role assignment create --role "Key Vault Secrets User" --assignee-object-id "\$CSI_IDENTITY_OBJECT_ID" --assignee-principal-type ServicePrincipal --scope "\$KV_SCOPE" || true
+
+        echo "Populating Secrets in \${KEYVAULT_NAME} (waiting for RBAC propagation)..."
+        for i in {1..6}; do
+            set +e
+            az keyvault secret set --vault-name "\${KEYVAULT_NAME}" --name "postgres-db" --value "\${POSTGRES_DB}" >/dev/null 2>&1
+            RESULT=\$?
+            set -e
+            
+            if [ \$RESULT -eq 0 ]; then
+                az keyvault secret set --vault-name "\${KEYVAULT_NAME}" --name "postgres-user" --value "\${POSTGRES_USER}" >/dev/null
+                az keyvault secret set --vault-name "\${KEYVAULT_NAME}" --name "postgres-password" --value "\${POSTGRES_PASSWORD}" >/dev/null
+                echo "Secrets successfully populated! Waiting 60s for DB CSI..."
+                sleep 60
+                break
+            else
+                echo "Waiting 20s for Azure RBAC propagation... (Attempt \$i/6)"
+                sleep 20
+            fi
+        done
+    """
+    
+    env.CSI_IDENTITY_CLIENT_ID = sh(script: "cat csi_client_id.txt", returnStdout: true).trim()
+
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
         sh """
             set -e
-            
             export KEYVAULT_NAME="${params.ENVIRONMENT}-devsecops-kv"
-
-            echo "Ensuring Key Vault \${KEYVAULT_NAME} exists..."
-            KV_EXISTS=\$(az keyvault list -g ${env.AKS_RESOURCE_GROUP} --query "[?name=='\${KEYVAULT_NAME}'].name" -o tsv)
-            if [ -z "\$KV_EXISTS" ]; then
-                echo "Creating Key Vault \${KEYVAULT_NAME}..."
-                az keyvault create --name \${KEYVAULT_NAME} -g ${env.AKS_RESOURCE_GROUP} --location eastus --enable-rbac-authorization true
-                sleep 15
-            fi
-            
-            KV_SCOPE=\$(az keyvault show -n \${KEYVAULT_NAME} --query "id" -o tsv)
-
-            CSI_IDENTITY_CLIENT_ID=\$(az aks show -g ${env.AKS_RESOURCE_GROUP} -n ${env.AKS_CLUSTER_NAME} --query "addonProfiles.azureKeyvaultSecretsProvider.identity.clientId" -o tsv)
-            export CSI_IDENTITY_CLIENT_ID
-            echo "Fetched CSI_IDENTITY_CLIENT_ID: \$CSI_IDENTITY_CLIENT_ID"
-
-            CSI_IDENTITY_OBJECT_ID=\$(az aks show -g ${env.AKS_RESOURCE_GROUP} -n ${env.AKS_CLUSTER_NAME} --query "addonProfiles.azureKeyvaultSecretsProvider.identity.objectId" -o tsv)
-
-            echo "Assigning Roles..."
-            az role assignment create --role "Key Vault Administrator" --assignee "${env.AZURE_CLIENT_ID}" --scope "\$KV_SCOPE" || true
-            az role assignment create --role "Key Vault Secrets User" --assignee-object-id "\$CSI_IDENTITY_OBJECT_ID" --assignee-principal-type ServicePrincipal --scope "\$KV_SCOPE" || true
-
-            echo "Populating Secrets in \${KEYVAULT_NAME} (waiting for RBAC propagation)..."
-            for i in {1..6}; do
-                set +e
-                az keyvault secret set --vault-name "\${KEYVAULT_NAME}" --name "postgres-db" --value "\${POSTGRES_DB}" >/dev/null 2>&1
-                RESULT=\$?
-                set -e
-                
-                if [ \$RESULT -eq 0 ]; then
-                    az keyvault secret set --vault-name "\${KEYVAULT_NAME}" --name "postgres-user" --value "\${POSTGRES_USER}" >/dev/null
-                    az keyvault secret set --vault-name "\${KEYVAULT_NAME}" --name "postgres-password" --value "\${POSTGRES_PASSWORD}" >/dev/null
-                    echo "Secrets successfully populated! Waiting 60s for role assignment propagation to AKS CSI driver..."
-                    sleep 60
-                    break
-                else
-                    echo "Waiting 20s for Azure RBAC propagation to allow Secret Creation... (Attempt \$i/6)"
-                    sleep 20
-                fi
-            done
-            
-            for f in ${K8S_DIR}/*.yaml kubernetes/network-policies.yaml; do
-                envsubst '\$AZURE_TENANT_ID,\$CSI_IDENTITY_CLIENT_ID,\$NAMESPACE,\$KEYVAULT_NAME' < "\$f" > "\$f.tmp" && mv "\$f.tmp" "\$f"
-            done
+            envsubst '\$AZURE_TENANT_ID,\$CSI_IDENTITY_CLIENT_ID,\$NAMESPACE,\$KEYVAULT_NAME' < kubernetes/network-policies.yaml > network-policies.yaml.tmp
+            mv network-policies.yaml.tmp kubernetes/network-policies.yaml
 
             ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
             ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
-            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/*.yaml kubernetes/network-policies.yaml ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/
+            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} kubernetes/network-policies.yaml ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/
 
             ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "
                 set -e
                 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                kubectl apply -f ${remoteDir}/ -n ${NAMESPACE}
-                kubectl rollout status deployment/postgres -n ${NAMESPACE} --timeout=600s
+                kubectl apply -f ${remoteDir}/network-policies.yaml -n ${NAMESPACE}
                 rm -rf ${remoteDir}
             "
         """
@@ -244,6 +246,9 @@ def setupArgoCD() {
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
         sh """
             set -e
+            envsubst '\$CSI_IDENTITY_CLIENT_ID,\$AZURE_TENANT_ID' < kubernetes/argocd/applications.yaml > applications.yaml.tmp
+            mv applications.yaml.tmp kubernetes/argocd/applications.yaml
+
             ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
 
             ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "mkdir -p ${remoteDir}"

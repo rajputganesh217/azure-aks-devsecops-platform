@@ -13,7 +13,7 @@ backend:
   replicaCount: 1
   image:
     repository: mydevopsacr123.azurecr.io/backend
-    tag: "latest"
+    tag: "backend-dev-latest"
   ingress:
     host: "api-dev.microservices.local"
 
@@ -21,7 +21,7 @@ frontend:
   replicaCount: 1
   image:
     repository: mydevopsacr123.azurecr.io/frontend
-    tag: "latest"
+    tag: "frontend-dev-latest"
   ingress:
     host: "dev.microservices.local"
 
@@ -29,4 +29,4 @@ worker:
   replicaCount: 1
   image:
     repository: mydevopsacr123.azurecr.io/worker
-    tag: "latest"
+    tag: "worker-dev-latest"

@@ -12,10 +12,24 @@ spec:
     helm:
       valueFiles:
         - values.yaml
+      parameters:
+        - name: postgres.csi.clientId
+          value: "${CSI_IDENTITY_CLIENT_ID}"
+        - name: postgres.csi.tenantId
+          value: "${AZURE_TENANT_ID}"
+        - name: backend.image.tag
+          value: "backend-dev-latest"
+        - name: frontend.image.tag
+          value: "frontend-dev-latest"
+        - name: worker.image.tag
+          value: "worker-dev-latest"
   destination:
     server: "https://kubernetes.default.svc"
     namespace: dev
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true
 ---
@@ -38,9 +52,22 @@ spec:
           value: "qa.microservices.local"
         - name: postgres.csi.keyvaultName
           value: "qa-devsecops-kv"
+        - name: postgres.csi.clientId
+          value: "${CSI_IDENTITY_CLIENT_ID}"
+        - name: postgres.csi.tenantId
+          value: "${AZURE_TENANT_ID}"
+        - name: backend.image.tag
+          value: "backend-qa-latest"
+        - name: frontend.image.tag
+          value: "frontend-qa-latest"
+        - name: worker.image.tag
+          value: "worker-qa-latest"
   destination:
     server: "https://kubernetes.default.svc"
     namespace: qa
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true

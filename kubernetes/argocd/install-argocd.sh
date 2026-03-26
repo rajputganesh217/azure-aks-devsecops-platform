@@ -74,60 +74,14 @@ spec:
                   number: 80
 INGRESS_EOF
 
-echo "=== Step 7: Applying ArgoCD Application manifests (monitoring-only) ==="
+echo "=== Step 7: Applying ArgoCD Application manifests (GitOps with Self-Heal) ==="
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/applications.yaml" ]; then
     kubectl apply -f "$SCRIPT_DIR/applications.yaml"
 else
-    # Fallback: apply inline
-    cat <<'APPS_EOF' | kubectl apply -f -
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: platform-dev
-  namespace: argocd
-spec:
-  project: default
-  source:
-    repoURL: "https://github.com/rajputganesh217/azure-aks-devsecops-platform.git"
-    targetRevision: main
-    path: kubernetes/charts/platform
-    helm:
-      valueFiles:
-        - values.yaml
-  destination:
-    server: "https://kubernetes.default.svc"
-    namespace: dev
-  syncPolicy:
-    syncOptions:
-      - CreateNamespace=true
----
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: platform-qa
-  namespace: argocd
-spec:
-  project: default
-  source:
-    repoURL: "https://github.com/rajputganesh217/azure-aks-devsecops-platform.git"
-    targetRevision: main
-    path: kubernetes/charts/platform
-    helm:
-      parameters:
-        - name: backend.ingress.host
-          value: "api-qa.microservices.local"
-        - name: frontend.ingress.host
-          value: "qa.microservices.local"
-        - name: postgres.csi.keyvaultName
-          value: "qa-devsecops-kv"
-  destination:
-    server: "https://kubernetes.default.svc"
-    namespace: qa
-  syncPolicy:
-    syncOptions:
-      - CreateNamespace=true
-APPS_EOF
+    echo "ERROR: applications.yaml not found at $SCRIPT_DIR/applications.yaml"
+    echo "This file must be provided by the Jenkins pipeline with CSI credentials injected."
+    exit 1
 fi
 
 echo ""
