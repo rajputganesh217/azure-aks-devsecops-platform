@@ -16,6 +16,8 @@ backend:
     tag: "backend-dev-latest"
   ingress:
     host: "api-dev.microservices.local"
+  hpa:
+    enabled: false
 
 frontend:
   replicaCount: 1
@@ -24,9 +26,13 @@ frontend:
     tag: "frontend-dev-latest"
   ingress:
     host: "dev.microservices.local"
+  hpa:
+    enabled: false
 
 worker:
   replicaCount: 1
   image:
     repository: mydevopsacr123.azurecr.io/worker
     tag: "worker-dev-latest"
+  hpa:
+    enabled: false

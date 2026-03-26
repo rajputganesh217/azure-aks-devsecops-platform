@@ -13,7 +13,7 @@ resources:
     memory: "64Mi"
 
 hpa:
-  enabled: true
+  enabled: false
   minReplicas: 1
-  maxReplicas: 3
+  maxReplicas: 1
   targetCPU: 70

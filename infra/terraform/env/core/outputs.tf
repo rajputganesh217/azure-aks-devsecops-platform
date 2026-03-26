@@ -34,3 +34,7 @@ output "csi_identity_client_id" {
 output "reports_storage_account_name" {
   value = data.azurerm_storage_account.reports.name
 }
+
+output "app_gateway_ip" {
+  value = module.app_gateway.public_ip
+}
