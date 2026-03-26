@@ -17,10 +17,12 @@ spec:
           value: "${CSI_IDENTITY_CLIENT_ID}"
         - name: postgres.csi.tenantId
           value: "${AZURE_TENANT_ID}"
+        - name: postgres.csi.keyvaultName
+          value: "dev-devsecops-kv"
         - name: backend.image.tag
           value: "backend-dev-latest"
         - name: backend.keyvaultName
-          value: "${KEYVAULT_NAME}"
+          value: "dev-devsecops-kv"
         - name: backend.csi.clientId
           value: "${CSI_IDENTITY_CLIENT_ID}"
         - name: backend.csi.tenantId
@@ -30,7 +32,7 @@ spec:
         - name: worker.image.tag
           value: "worker-dev-latest"
         - name: worker.keyvaultName
-          value: "${KEYVAULT_NAME}"
+          value: "dev-devsecops-kv"
         - name: worker.csi.clientId
           value: "${CSI_IDENTITY_CLIENT_ID}"
         - name: worker.csi.tenantId
@@ -70,10 +72,22 @@ spec:
           value: "${AZURE_TENANT_ID}"
         - name: backend.image.tag
           value: "backend-qa-latest"
+        - name: backend.keyvaultName
+          value: "qa-devsecops-kv"
+        - name: backend.csi.clientId
+          value: "${CSI_IDENTITY_CLIENT_ID}"
+        - name: backend.csi.tenantId
+          value: "${AZURE_TENANT_ID}"
         - name: frontend.image.tag
           value: "frontend-qa-latest"
         - name: worker.image.tag
           value: "worker-qa-latest"
+        - name: worker.keyvaultName
+          value: "qa-devsecops-kv"
+        - name: worker.csi.clientId
+          value: "${CSI_IDENTITY_CLIENT_ID}"
+        - name: worker.csi.tenantId
+          value: "${AZURE_TENANT_ID}"
   destination:
     server: "https://kubernetes.default.svc"
     namespace: qa

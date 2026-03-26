@@ -247,7 +247,7 @@ def setupArgoCD() {
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
         sh """
             set -e
-            envsubst '\$CSI_IDENTITY_CLIENT_ID,\$AZURE_TENANT_ID,\$KEYVAULT_NAME' < kubernetes/argocd/applications.yaml > applications.yaml.tmp
+            envsubst '\$CSI_IDENTITY_CLIENT_ID,\$AZURE_TENANT_ID' < kubernetes/argocd/applications.yaml > applications.yaml.tmp
             mv applications.yaml.tmp kubernetes/argocd/applications.yaml
 
             ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
