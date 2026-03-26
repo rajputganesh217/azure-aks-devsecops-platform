@@ -16,7 +16,8 @@ kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 
 echo "=== Step 2: Installing Argo-CD (Server-Side Apply) ==="
 # We MUST use --server-side because ArgoCD CRDs are too large for standard kubectl apply annotations
-kubectl apply --server-side -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+# We add --force-conflicts because previous client-side applies own these fields
+kubectl apply --server-side --force-conflicts -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
 echo "=== Step 3: Waiting for Argo-CD server to be ready ==="
 kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
