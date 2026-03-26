@@ -6,11 +6,11 @@ image:
 
 resources:
   limits:
-    cpu: "100m"
-    memory: "128Mi"
-  requests:
-    cpu: "10m"
+    cpu: "50m"
     memory: "64Mi"
+  requests:
+    cpu: "5m"
+    memory: "32Mi"
 
 hpa:
   enabled: false

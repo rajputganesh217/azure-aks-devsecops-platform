@@ -19,8 +19,8 @@ resources:
     cpu: "50m"
     memory: "64Mi"
   requests:
-    cpu: "10m"
-    memory: "32Mi"
+    cpu: "5m"
+    memory: "16Mi"
 
 hpa:
   enabled: false
