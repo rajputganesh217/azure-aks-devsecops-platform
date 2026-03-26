@@ -14,8 +14,9 @@ NAMESPACE_SOURCE="${1:-dev}"   # Namespace to copy TLS secret from
 echo "=== Step 1: Creating argocd namespace ==="
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 
-echo "=== Step 2: Installing Argo-CD ==="
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+echo "=== Step 2: Installing Argo-CD (Server-Side Apply) ==="
+# We MUST use --server-side because ArgoCD CRDs are too large for standard kubectl apply annotations
+kubectl apply --server-side -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
 echo "=== Step 3: Waiting for Argo-CD server to be ready ==="
 kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
@@ -34,10 +35,16 @@ else
 fi
 
 echo "=== Step 5: Copying TLS secret from ${NAMESPACE_SOURCE} to argocd namespace ==="
+# Ensure jq is installed (used for manifest transformation)
+if ! command -v jq &> /dev/null; then
+    echo "jq not found. Installing..."
+    sudo apt-get update -qq && sudo apt-get install -y -qq jq > /dev/null 2>&1 || true
+fi
+
 if kubectl get secret microservices-tls-secret -n "$NAMESPACE_SOURCE" > /dev/null 2>&1; then
     kubectl get secret microservices-tls-secret -n "$NAMESPACE_SOURCE" -o json | \
       jq '.metadata.namespace = "argocd" | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp)' | \
-      kubectl apply -f -
+      kubectl apply --overwrite=true -f -
     echo "TLS secret copied successfully."
 else
     echo "WARNING: TLS secret not found in ${NAMESPACE_SOURCE}. ArgoCD Ingress may not work over HTTPS."

@@ -16,6 +16,22 @@ echo "============================================"
 echo "  Runtime Security Setup"
 echo "============================================"
 
+# ─── Step 0: Dependency Checks ───
+if ! command -v kubectl &> /dev/null; then
+    echo "ERROR: kubectl not found. Please ensure it is installed and configured on the Jump Server."
+    exit 1
+fi
+
+if ! command -v helm &> /dev/null; then
+    echo "helm not found. Installing..."
+    curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash || true
+fi
+
+if ! command -v helm &> /dev/null; then
+    echo "ERROR: helm installation failed. Please install helm manually on the Jump Server."
+    exit 1
+fi
+
 # ─── Step 1: Install Falco (Runtime Threat Detection) ───
 echo ""
 echo "=== Step 1: Installing Falco ==="
