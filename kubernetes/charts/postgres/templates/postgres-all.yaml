@@ -57,6 +57,8 @@ spec:
       labels:
         app: postgres
     spec:
+      serviceAccountName: postgres-sa
+      automountServiceAccountToken: false
       securityContext:
         fsGroup: 999
       containers:

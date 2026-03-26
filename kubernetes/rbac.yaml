@@ -1,0 +1,135 @@
+---
+# ============================================================
+# RBAC Configuration for Microservices Platform
+# ============================================================
+# Principle of Least Privilege:
+#   - Each app gets its own ServiceAccount
+#   - Backend/Worker: can only read secrets (for DB creds via CSI)
+#   - Frontend: no special permissions (static nginx)
+#   - Postgres: can read secrets (CSI mount)
+# ============================================================
+
+# ─── Service Accounts ───
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-sa
+  labels:
+    app: shoe-backend
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: frontend-sa
+  labels:
+    app: shoe-frontend
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: worker-sa
+  labels:
+    app: worker
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres-sa
+  labels:
+    app: postgres
+automountServiceAccountToken: false
+
+---
+# ─── Roles ───
+# Backend Role: Can only read its own configmaps and endpoints
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backend-role
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get"]
+---
+# Worker Role: Can only read its own configmaps
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: worker-role
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+---
+# Postgres Role: Minimal — read configmaps for health checks
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: postgres-role
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get"]
+---
+# Frontend Role: No K8s API access needed (static content)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: frontend-role
+rules: []
+
+---
+# ─── Role Bindings ───
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backend-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: backend-sa
+roleRef:
+  kind: Role
+  name: backend-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: frontend-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: frontend-sa
+roleRef:
+  kind: Role
+  name: frontend-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: worker-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: worker-sa
+roleRef:
+  kind: Role
+  name: worker-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: postgres-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: postgres-sa
+roleRef:
+  kind: Role
+  name: postgres-role
+  apiGroup: rbac.authorization.k8s.io

@@ -214,11 +214,12 @@ def deployPostgres() {
 
             ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
             ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
-            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} kubernetes/network-policies.yaml ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/
+            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} kubernetes/network-policies.yaml kubernetes/rbac.yaml ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/
 
             ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "
                 set -e
                 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                kubectl apply -f ${remoteDir}/rbac.yaml -n ${NAMESPACE}
                 kubectl apply -f ${remoteDir}/network-policies.yaml -n ${NAMESPACE}
                 rm -rf ${remoteDir}
             "
@@ -251,13 +252,15 @@ def setupArgoCD() {
 
             ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
 
-            ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "mkdir -p ${remoteDir}"
+            ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "mkdir -p ${remoteDir}/security"
             scp -o StrictHostKeyChecking=no -i \${SSH_KEY} kubernetes/argocd/install-argocd.sh kubernetes/argocd/applications.yaml ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/
+            scp -o StrictHostKeyChecking=no -i \${SSH_KEY} kubernetes/security/install-runtime-security.sh ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/security/
 
             ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "
                 set -e
-                chmod +x ${remoteDir}/install-argocd.sh
+                chmod +x ${remoteDir}/install-argocd.sh ${remoteDir}/security/install-runtime-security.sh
                 ${remoteDir}/install-argocd.sh ${NAMESPACE}
+                ${remoteDir}/security/install-runtime-security.sh
                 rm -rf ${remoteDir}
             "
         """
