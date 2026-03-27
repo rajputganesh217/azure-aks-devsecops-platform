@@ -47,15 +47,13 @@ flowchart TD
         subgraph VNet ["Tiered Virtual Network"]
             direction LR
             subgraph AppSubnet ["☸️ AKS Subnet"]
-                AKS("AKS Private Cluster\n(ArgoCD Running)")
+                AKS("AKS Private Cluster")
+                DB("PostgreSQL Pod\n(StatefulSet)")
+                AKS---DB
             end
             
             subgraph JumpSubnet ["🛡️ Bastion Subnet"]
                 JumpServer("Jump Server (SSH)")
-            end
-
-            subgraph DBSubnet ["🗄️ Database Tier"]
-                DB("Azure PostgreSQL")
             end
         end
     end
@@ -78,12 +76,13 @@ flowchart TD
 3. **Local SSH Key:** Run `ssh-keygen -t rsa -b 4096 -f ~/.ssh/aks_jump_key` on your host and manually inject the `.pub` file contents into the Terraform `tfvars` files before provisioning.
 
 ### Deployment Sequence (The Pipeline Playbook)
-1. **Infrastructure (Terraform):** Run the `infra-terraform-pipeline` in Jenkins. This provisions the network, AKS, Key Vault, and ACR.
-2. **Bootstrap (Database & ArgoCD):** Run the `database` Jenkins pipeline. 
+1. **Persistent Infrastructure:** Run the `persistent-infra-pipeline` in Jenkins. This initializes the global shared resources (VNet, ACR, Storage).
+2. **Core Infrastructure:** Run the `infra-terraform-pipeline` (Core environment). This provisions the AKS Cluster and Key Vault within the persistent network.
+3. **Bootstrap (Database & ArgoCD):** Run the `database` Jenkins pipeline. 
    * It uses the secure Jump Server to install the Key Vault CSI bindings.
-   * It natively bootstraps ArgoCD into the cluster.
+   * It installs the **PostgreSQL Pod** and bootstraps **ArgoCD** into the cluster.
    * ArgoCD instantly reads the `values-{env}.yaml` files and creates the app deployments.
-3. **Microservices (Application Build):** Run the `backend`, `frontend`, and `worker` pipelines respectively. This will trigger Kube-Score scans, build the Docker images, push to ACR, and trigger ArgoCD to initialize the pods.
+4. **Microservices (Application Build):** Run the `backend`, `frontend`, and `worker` pipelines respectively. This will trigger Kube-Score scans, build the Docker images, push to ACR, and trigger ArgoCD to initialize the pods.
 
 ---
 
