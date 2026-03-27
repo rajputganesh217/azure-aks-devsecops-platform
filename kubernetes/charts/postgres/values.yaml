@@ -18,3 +18,9 @@ csi:
   tenantId: ""
   clientId: ""
   keyvaultName: ""
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

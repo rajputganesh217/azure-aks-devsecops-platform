@@ -1,0 +1,24 @@
+flowchart TD
+    A["Code change or promotion request"] --> B["Jenkins pipeline start"]
+    B --> C["Prepare workspace<br/>resolve commit id and create security-reports directory"]
+    C --> D{"Target environment"}
+
+    D -->|dev| E["Run Gitleaks"]
+    E --> F["Run OWASP Dependency-Check"]
+    F --> G["Run kube-score on Kubernetes manifests"]
+    G --> H["Build Docker image"]
+    H --> I["Push image to Azure Container Registry"]
+    I --> J["Run Trivy image scan"]
+    J --> K["Render manifests with envsubst"]
+
+    D -->|qa / uat / prod| L["Promote image<br/>pull tag from previous environment and push new tag"]
+    L --> K
+
+    K --> M["SSH to jump server and copy manifests with SCP"]
+    M --> N["Create namespace if missing"]
+    N --> O["kubectl apply manifests"]
+    O --> P["Wait for deployment rollout status"]
+    P --> Q{"dev environment?"}
+    Q -->|yes| R["Upload security reports to Azure Storage Account"]
+    Q -->|no| S["Pipeline complete"]
+    R --> S

@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "microservice.fullname" . }}
+  labels:
+    {{- include "microservice.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "microservice.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "microservice.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ default (printf "%s-sa" (include "microservice.fullname" .)) .Values.serviceAccount.name }}
+      automountServiceAccountToken: false
+      containers:
+        - name: {{ include "microservice.fullname" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.service.enabled }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort | default .Values.service.port }}
+              name: http
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+          {{- with .Values.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.probes.liveness }}
+          livenessProbe:
+            {{- toYaml .Values.probes.liveness | nindent 12 }}
+          {{- end }}
+          {{- if .Values.probes.readiness }}
+          readinessProbe:
+            {{- toYaml .Values.probes.readiness | nindent 12 }}
+          {{- end }}
+          {{- if .Values.csi.enabled }}
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+          {{- end }}
+          {{- with .Values.customVolumeMounts }}
+          {{- if not $.Values.csi.enabled }}
+          volumeMounts:
+          {{- end }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if .Values.csi.enabled }}
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ printf "%s-kv-secrets" (include "microservice.fullname" .) | quote }}
+      {{- end }}
+      {{- with .Values.customVolumes }}
+      {{- if not $.Values.csi.enabled }}
+      volumes:
+      {{- end }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

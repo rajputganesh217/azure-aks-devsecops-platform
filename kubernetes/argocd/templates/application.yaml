@@ -1,0 +1,54 @@
+{{- /*
+  ArgoCD Application Template
+  Dynamically generates Helm parameters from the services map.
+  Adding a new service or environment requires ZERO template changes.
+*/ -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-{{ .Values.environment }}
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.repoURL | quote }}
+    targetRevision: {{ .Values.targetRevision }}
+    path: {{ .Values.chartPath }}
+    helm:
+      valueFiles:
+        - values.yaml
+      parameters:
+        {{- range $svcName, $svcConf := .Values.services }}
+        # ── {{ $svcName }} ──
+        {{- if ne $svcName "postgres" }}
+        - name: {{ $svcName }}.image.tag
+          value: {{ printf "%s-%s-latest" $svcName $.Values.environment | quote }}
+        {{- end }}
+        {{- if $svcConf.needsCsi }}
+        - name: {{ $svcName }}.csi.clientId
+          value: {{ $.Values.csi.clientId | quote }}
+        - name: {{ $svcName }}.csi.tenantId
+          value: {{ $.Values.csi.tenantId | quote }}
+        {{- if eq $svcName "postgres" }}
+        - name: {{ $svcName }}.csi.keyvaultName
+          value: {{ $.Values.keyvaultName | quote }}
+        {{- else }}
+        - name: {{ $svcName }}.keyvaultName
+          value: {{ $.Values.keyvaultName | quote }}
+        {{- end }}
+        {{- end }}
+        {{- if $svcConf.needsIngress }}
+        - name: {{ $svcName }}.ingress.host
+          value: {{ printf "%s%s.%s" (default "" $svcConf.ingressPrefix) $.Values.environment $.Values.domain | quote }}
+        {{- end }}
+        {{- end }}
+
+  destination:
+    server: {{ .Values.destination.server | quote }}
+    namespace: {{ .Values.environment }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

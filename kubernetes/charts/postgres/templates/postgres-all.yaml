@@ -47,6 +47,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
 spec:
   replicas: 1
   selector:
@@ -55,7 +57,7 @@ spec:
   template:
     metadata:
       labels:
-        app: postgres
+        {{- include "postgres.labels" . | nindent 8 }}
     spec:
       serviceAccountName: postgres-sa
       automountServiceAccountToken: false
@@ -100,6 +102,18 @@ spec:
               - "$(POSTGRES_DB)"
           initialDelaySeconds: 5
           periodSeconds: 5
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       volumes:
       - name: postgres-data
         persistentVolumeClaim:

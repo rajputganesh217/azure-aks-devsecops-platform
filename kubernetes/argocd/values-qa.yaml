@@ -1,0 +1,3 @@
+# QA environment overrides
+environment: qa
+keyvaultName: "qa-devsecops-kv"

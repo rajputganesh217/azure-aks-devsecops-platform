@@ -52,7 +52,7 @@ pipeline {
             when { expression { params.ENVIRONMENT == 'dev' } }
             steps {
                 script {
-                    sh "docker run --rm -v \$(pwd):/project zegl/kube-score:latest score ${K8S_DIR}/*.yaml > security-reports/kube-score-database.txt || true"
+                    sh "docker run --rm -v \$(pwd):/apps alpine/helm template /apps/kubernetes/charts/platform | docker run --rm -i zegl/kube-score:latest score - > security-reports/kube-score-database.txt || true"
                 }
             }
         }
@@ -247,19 +247,35 @@ def setupArgoCD() {
     withCredentials([sshUserPrivateKey(credentialsId: 'jump-server-ssh', keyFileVariable: 'SSH_KEY')]) {
         sh """
             set -e
-            envsubst '\$CSI_IDENTITY_CLIENT_ID,\$AZURE_TENANT_ID' < kubernetes/argocd/applications.yaml > applications.yaml.tmp
-            mv applications.yaml.tmp kubernetes/argocd/applications.yaml
 
             ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
 
-            ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "mkdir -p ${remoteDir}/security"
-            scp -o StrictHostKeyChecking=no -i \${SSH_KEY} kubernetes/argocd/install-argocd.sh kubernetes/argocd/applications.yaml ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/
-            scp -o StrictHostKeyChecking=no -i \${SSH_KEY} kubernetes/security/install-runtime-security.sh ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/security/
+            ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "mkdir -p ${remoteDir}/argocd/templates ${remoteDir}/security"
+
+            scp -o StrictHostKeyChecking=no -i \${SSH_KEY} \
+                kubernetes/argocd/Chart.yaml \
+                kubernetes/argocd/values.yaml \
+                kubernetes/argocd/install-argocd.sh \
+                kubernetes/argocd/values-dev.yaml \
+                kubernetes/argocd/values-qa.yaml \
+                kubernetes/argocd/values-uat.yaml \
+                kubernetes/argocd/values-prod.yaml \
+                ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/argocd/
+
+            scp -o StrictHostKeyChecking=no -i \${SSH_KEY} \
+                kubernetes/argocd/templates/application.yaml \
+                ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/argocd/templates/
+
+            scp -o StrictHostKeyChecking=no -i \${SSH_KEY} \
+                scripts/security/install-runtime-security.sh \
+                ${JUMP_USER}@${env.JUMP_SERVER_IP}:${remoteDir}/security/
 
             ssh -o StrictHostKeyChecking=no -i \${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "
                 set -e
-                chmod +x ${remoteDir}/install-argocd.sh ${remoteDir}/security/install-runtime-security.sh
-                ${remoteDir}/install-argocd.sh ${NAMESPACE}
+                export CSI_IDENTITY_CLIENT_ID='${env.CSI_IDENTITY_CLIENT_ID}'
+                export AZURE_TENANT_ID='${env.AZURE_TENANT_ID}'
+                chmod +x ${remoteDir}/argocd/install-argocd.sh ${remoteDir}/security/install-runtime-security.sh
+                ${remoteDir}/argocd/install-argocd.sh ${NAMESPACE}
                 ${remoteDir}/security/install-runtime-security.sh
                 rm -rf ${remoteDir}
             "

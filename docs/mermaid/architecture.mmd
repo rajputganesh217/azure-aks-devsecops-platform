@@ -1,0 +1,46 @@
+flowchart LR
+    Git["Git Repository"] --> Jenkins["Jenkins"]
+
+    subgraph Azure["Azure Subscription"]
+        ACR["Azure Container Registry"]
+        KV["Azure Key Vault"]
+        SA["Storage Account<br/>security reports"]
+        LAW["Log Analytics Workspace"]
+
+        subgraph VNet["Azure Virtual Network"]
+            direction TB
+
+            subgraph Public["Public Subnets"]
+                AppGW["Application Gateway Standard_v2<br/>AGIC-managed ingress"]
+                Jump["Jump Server<br/>SSH, az, kubectl, helm"]
+            end
+
+            subgraph PrivateApp["Private App Subnets"]
+                AKS["Private AKS Cluster"]
+                FE["Frontend Pod<br/>Nginx + static UI"]
+                BE["Backend Pod<br/>Python Flask API"]
+                WK["Worker Pod<br/>Python background processor"]
+                PG["PostgreSQL Pod<br/>PVC-backed database"]
+            end
+
+            subgraph ReservedDB["Delegated DB Subnets"]
+                DBSubnet["Reserved for future<br/>PostgreSQL Flexible Server"]
+            end
+        end
+    end
+
+    Jenkins -->|Terraform apply/destroy| Azure
+    Jenkins -->|Build and push images| ACR
+    Jenkins -->|Upload scan reports| SA
+    Jenkins -->|SSH and SCP manifests| Jump
+    Jump -->|kubectl apply| AKS
+
+    AKS -->|Pull images| ACR
+    AKS -->|Read secrets through CSI| KV
+    AKS -->|Logs and metrics| LAW
+
+    AppGW -->|Frontend host| FE
+    AppGW -->|API host| BE
+    FE -->|ClusterIP /api traffic| BE
+    BE -->|TCP 5432| PG
+    WK -->|TCP 5432| PG

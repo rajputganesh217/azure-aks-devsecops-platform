@@ -1,0 +1,48 @@
+# ──────────────────────────────────────────────────────────
+# ArgoCD Apps — Universal Values (shared across all envs)
+# ──────────────────────────────────────────────────────────
+# To add a new environment: create values-<env>.yaml that
+# overrides "environment" and "keyvaultName".
+# To add a new microservice: add an entry under "services".
+# ──────────────────────────────────────────────────────────
+
+# ── Git Source ──
+repoURL: "https://github.com/rajputganesh217/azure-aks-devsecops-platform.git"
+targetRevision: main
+chartPath: kubernetes/charts/platform
+
+# ── Cluster ──
+destination:
+  server: "https://kubernetes.default.svc"
+
+# ── CSI (injected at render-time by install-argocd.sh) ──
+csi:
+  clientId: ""
+  tenantId: ""
+
+# ── Domain Pattern ──
+# Hosts are derived:  <prefix><environment>.microservices.local
+domain: "microservices.local"
+
+# ── Services ──
+# Each service listed here is automatically wired into the
+# ArgoCD Application parameters. Set needsCsi: true for
+# services that mount Azure Key Vault secrets.
+services:
+  postgres:
+    needsCsi: true
+    needsIngress: false
+
+  backend:
+    needsCsi: true
+    needsIngress: true
+    ingressPrefix: "api-"
+
+  frontend:
+    needsCsi: false
+    needsIngress: true
+    ingressPrefix: ""
+
+  worker:
+    needsCsi: true
+    needsIngress: false

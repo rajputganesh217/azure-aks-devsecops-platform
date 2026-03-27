@@ -1,0 +1,3 @@
+# Dev environment overrides
+environment: dev
+keyvaultName: "dev-devsecops-kv"

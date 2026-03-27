@@ -1,0 +1,57 @@
+image:
+  repository: ""
+  tag: "latest"
+  pullPolicy: Always
+
+appLabel: ""
+
+replicaCount: 1
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  host: ""
+  tlsSecretName: "microservices-tls-secret"
+
+resources:
+  limits:
+    cpu: "50m"
+    memory: "64Mi"
+  requests:
+    cpu: "5m"
+    memory: "16Mi"
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+  targetCPU: 70
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+probes:
+  liveness: {}
+  readiness: {}
+
+env: []
+
+csi:
+  enabled: false
+  tenantId: ""
+  clientId: ""
+  keyvaultName: ""
+  secrets: []
+
+customVolumes: []
+customVolumeMounts: []

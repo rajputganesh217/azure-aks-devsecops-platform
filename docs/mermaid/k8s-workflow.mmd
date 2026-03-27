@@ -1,0 +1,23 @@
+flowchart LR
+    User["End user"] --> AppGW["Application Gateway"]
+    AppGW --> FEIngress["Frontend Ingress"]
+    AppGW --> BEIngress["Backend Ingress"]
+
+    FEIngress --> FESvc["shoe-frontend Service<br/>ClusterIP"]
+    FESvc --> FEPod["Frontend Pod<br/>Nginx"]
+
+    BEIngress --> BESvc["shoe-backend Service<br/>ClusterIP"]
+    BESvc --> BEPod["Backend Pod<br/>Flask API"]
+
+    FEPod -->|/api proxy over internal DNS| BESvc
+
+    BEPod --> PGSvc["postgres Service"]
+    Worker["Worker Pod"] --> PGSvc
+    PGSvc --> PGPod["PostgreSQL Pod + PVC"]
+
+    KV["Azure Key Vault"] --> SPC["SecretProviderClass<br/>azure-kv-secrets"]
+    SPC --> K8sSecret["Kubernetes Secret<br/>postgres-secret"]
+
+    K8sSecret --> BEPod
+    K8sSecret --> Worker
+    K8sSecret --> PGPod

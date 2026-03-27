@@ -1,0 +1,3 @@
+# UAT environment overrides
+environment: uat
+keyvaultName: "uat-devsecops-kv"

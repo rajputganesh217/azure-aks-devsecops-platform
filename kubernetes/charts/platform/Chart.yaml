@@ -9,12 +9,15 @@ dependencies:
   - name: postgres
     version: "0.1.0"
     repository: "file://../postgres"
-  - name: backend
+  - name: microservice
     version: "0.1.0"
-    repository: "file://../backend"
-  - name: frontend
+    repository: "file://../microservice"
+    alias: backend
+  - name: microservice
     version: "0.1.0"
-    repository: "file://../frontend"
-  - name: worker
+    repository: "file://../microservice"
+    alias: frontend
+  - name: microservice
     version: "0.1.0"
-    repository: "file://../worker"
+    repository: "file://../microservice"
+    alias: worker

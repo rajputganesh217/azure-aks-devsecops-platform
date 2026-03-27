@@ -1,38 +1,159 @@
-# Umbrella chart values — override sub-chart defaults per environment
-# Usage: helm install platform . -n dev -f values-dev.yaml
+# Umbrella chart values
 
 postgres:
   csi:
     tenantId: ""
     clientId: ""
-    keyvaultName: "dev-devsecops-kv"
+    keyvaultName: ""
   storage:
     size: 5Gi
 
 backend:
-  replicaCount: 1
+  fullnameOverride: shoe-backend
+  appLabel: shoe-backend
+  serviceAccount:
+    name: backend-sa
   image:
     repository: mydevopsacr123.azurecr.io/backend
-    tag: "backend-dev-latest"
+  service:
+    enabled: true
+    port: 5000
+    targetPort: 5000
   ingress:
-    host: "api-dev.microservices.local"
+    enabled: true
+    tlsSecretName: microservices-tls-secret
   hpa:
     enabled: false
+  env:
+    - name: DB_HOST
+      value: postgres
+    - name: DB_NAME
+      valueFrom:
+        secretKeyRef:
+          name: postgres-secret
+          key: POSTGRES_DB
+    - name: DB_USER
+      valueFrom:
+        secretKeyRef:
+          name: postgres-secret
+          key: POSTGRES_USER
+    - name: DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: postgres-secret
+          key: POSTGRES_PASSWORD
+  probes:
+    liveness:
+      httpGet:
+        path: /health
+        port: 5000
+      initialDelaySeconds: 15
+      periodSeconds: 10
+    readiness:
+      httpGet:
+        path: /health
+        port: 5000
+      initialDelaySeconds: 5
+      periodSeconds: 5
+  customVolumeMounts:
+    - name: secrets-store-inline
+      mountPath: "/mnt/secrets-store"
+      readOnly: true
+  customVolumes:
+    - name: secrets-store-inline
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: "azure-kv-secrets"
 
 frontend:
-  replicaCount: 1
+  fullnameOverride: shoe-frontend
+  appLabel: shoe-frontend
+  serviceAccount:
+    name: frontend-sa
   image:
     repository: mydevopsacr123.azurecr.io/frontend
-    tag: "frontend-dev-latest"
+  service:
+    enabled: true
+    port: 80
+    targetPort: 8080
   ingress:
-    host: "dev.microservices.local"
+    enabled: true
+    tlsSecretName: microservices-tls-secret
   hpa:
     enabled: false
+  env: []
+  probes:
+    liveness:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 15
+      periodSeconds: 10
+    readiness:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
 
 worker:
-  replicaCount: 1
+  fullnameOverride: worker
+  appLabel: worker
+  serviceAccount:
+    name: worker-sa
   image:
     repository: mydevopsacr123.azurecr.io/worker
-    tag: "worker-dev-latest"
+  service:
+    enabled: false
+  ingress:
+    enabled: false
   hpa:
     enabled: false
+  env:
+    - name: DB_HOST
+      value: postgres
+    - name: DB_NAME
+      valueFrom:
+        secretKeyRef:
+          name: postgres-secret
+          key: POSTGRES_DB
+    - name: DB_USER
+      valueFrom:
+        secretKeyRef:
+          name: postgres-secret
+          key: POSTGRES_USER
+    - name: DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: postgres-secret
+          key: POSTGRES_PASSWORD
+  probes:
+    liveness:
+      exec:
+        command:
+          - pgrep
+          - -f
+          - worker.py
+      initialDelaySeconds: 10
+      periodSeconds: 20
+    readiness:
+      exec:
+        command:
+          - pgrep
+          - -f
+          - worker.py
+      initialDelaySeconds: 5
+      periodSeconds: 10
+  customVolumeMounts:
+    - name: secrets-store-inline
+      mountPath: "/mnt/secrets-store"
+      readOnly: true
+  customVolumes:
+    - name: secrets-store-inline
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: "azure-kv-secrets"
