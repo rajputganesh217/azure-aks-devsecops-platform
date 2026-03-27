@@ -52,7 +52,7 @@ pipeline {
             when { expression { params.ENVIRONMENT == 'dev' } }
             steps {
                 script {
-                    sh "docker run --rm -v \$(pwd):/apps alpine/helm template /apps/kubernetes/charts/platform | docker run --rm -i zegl/kube-score:latest score - > security-reports/kube-score-database.txt || true"
+                    sh "docker run --rm -v \$(pwd):/apps alpine/helm sh -c 'cd /apps/kubernetes/charts/platform && helm dependency build >/dev/null 2>&1 && helm template .' | docker run --rm -i zegl/kube-score:latest score - > security-reports/kube-score-database.txt || true"
                 }
             }
         }
@@ -117,7 +117,7 @@ def createSecret() {
         sh """
             set -e
             ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R "${env.JUMP_SERVER_IP}" || true
-            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${K8S_DIR}/openssl.cnf ${JUMP_USER}@${env.JUMP_SERVER_IP}:/tmp/openssl-san.cnf
+            scp -o StrictHostKeyChecking=no -i ${SSH_KEY} scripts/security/openssl.cnf ${JUMP_USER}@${env.JUMP_SERVER_IP}:/tmp/openssl-san.cnf
 
             ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JUMP_USER}@${env.JUMP_SERVER_IP} "
                 set -e
