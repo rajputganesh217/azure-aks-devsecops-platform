@@ -88,13 +88,13 @@ frontend:
     liveness:
       httpGet:
         path: /
-        port: 80
+        port: 8080
       initialDelaySeconds: 15
       periodSeconds: 10
     readiness:
       httpGet:
         path: /
-        port: 80
+        port: 8080
       initialDelaySeconds: 5
       periodSeconds: 5
 
